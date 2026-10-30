@@ -17,7 +17,8 @@ import (
 	"time"
 )
 
-const Version = "1.1.0"
+// Version can be set at build time with -ldflags '-X trafficmon/agent/internal/monitor.Version=...'.
+var Version = "1.1.0"
 
 type Runner struct {
 	Store       *Store

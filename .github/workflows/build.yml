@@ -1,0 +1,263 @@
+name: Build images and agent
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本，例如 1.2.0、v1.2.0 或 1.2.0-rc.1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Resolve release version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      commit: ${{ steps.release.outputs.commit }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate version and source commit
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          commit=$(git rev-parse HEAD)
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            version="${INPUT_VERSION#v}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            printf '%s\n' 'version=' 'tag=' 'prerelease=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          number='(0|[1-9][0-9]*)'
+          identifier='(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)'
+          pattern="^${number}\\.${number}\\.${number}(-${identifier}(\\.${identifier})*)?$"
+          if (( ${#version} > 127 )) || [[ ! "$version" =~ $pattern ]]; then
+            echo '::error::版本须为 1.2.0、v1.2.0 或 1.2.0-rc.1 格式，不支持构建元数据。' >&2
+            exit 1
+          fi
+
+          tag="v$version"
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            tag_commit=$(git rev-parse "refs/tags/$tag^{commit}")
+            if [[ "$tag_commit" != "$commit" ]]; then
+              echo '::error::已有版本标签指向其他提交，请选择对应标签运行，或填写新版本。' >&2
+              exit 1
+            fi
+          fi
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+          printf '%s\n' "version=$version" "tag=$tag" "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+  check:
+    name: Check center
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  agent:
+    name: Test and package Linux agent
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - run: go mod download
+      - run: go vet ./...
+      - run: go test -race ./...
+      - name: Build static binaries
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          AGENT_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p ../artifacts/agent
+          ldflags='-s -w'
+          if [[ -n "$AGENT_VERSION" ]]; then
+            ldflags+=" -X trafficmon/agent/internal/monitor.Version=$AGENT_VERSION"
+          fi
+          for arch in amd64 arm64; do
+            binary="traffic-agent-linux-${arch}"
+            GOARCH="$arch" go build -buildvcs=false -trimpath -ldflags="$ldflags" \
+              -o "../artifacts/agent/$binary" ./cmd/traffic-agent
+          done
+          built_version=$(../artifacts/agent/traffic-agent-linux-amd64 version)
+          echo "$built_version"
+          if [[ -n "$AGENT_VERSION" && "$built_version" != "$AGENT_VERSION" ]]; then
+            echo '::error::Agent 版本与发布版本不一致。' >&2
+            exit 1
+          fi
+      - name: Generate and verify checksums
+        working-directory: artifacts/agent
+        run: |
+          sha256sum traffic-agent-linux-* > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: traffic-agent-linux
+          path: artifacts/agent/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  image:
+    name: Build and publish center image
+    needs: [prepare, check, agent]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - name: Normalize image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=raw,value=${{ needs.prepare.outputs.tag }},enable=${{ needs.prepare.outputs.tag != '' }}
+            type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.tag != '' }}
+            type=sha
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.tag != '' && needs.prepare.outputs.prerelease == 'false' }}
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+      - name: Build local image for smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: linux-traffic-monitor:ci
+          cache-from: type=gha,scope=control
+      - name: Smoke test center with disposable data
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --tmpfs /data:rw,noexec,nosuid,size=64m,uid=1000,gid=1000 \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --mount "type=bind,source=$PWD/scripts/docker-smoke.mjs,target=/app/docker-smoke.mjs,readonly" \
+            linux-traffic-monitor:ci node /app/docker-smoke.mjs
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build multi-platform image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=control
+          cache-to: type=gha,scope=control,mode=max
+
+  release:
+    name: Upload agent to GitHub Releases
+    if: needs.prepare.outputs.tag != '' && github.event_name != 'pull_request'
+    needs: [prepare, agent, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: traffic-agent-linux
+          path: artifacts/agent
+      - name: Verify release assets
+        working-directory: artifacts/agent
+        run: sha256sum --check SHA256SUMS
+      - name: Create release or update assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          assets=(
+            artifacts/agent/traffic-agent-linux-amd64
+            artifacts/agent/traffic-agent-linux-arm64
+            artifacts/agent/SHA256SUMS
+          )
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            options=(--generate-notes --title "$RELEASE_TAG" --target "$RELEASE_COMMIT")
+            if [[ "$EVENT_NAME" != workflow_dispatch ]]; then
+              options+=(--verify-tag)
+            fi
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              options+=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" "${assets[@]}" "${options[@]}"
+          fi

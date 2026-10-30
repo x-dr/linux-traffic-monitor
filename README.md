@@ -115,6 +115,24 @@ location / {
 
 ## 接入 Go Agent
 
+### 下载发布版本
+
+GitHub 仓库的 **Releases** 页面提供以下附件，无需在 VPS 上安装 Go：
+
+- `traffic-agent-linux-amd64`：Intel / AMD 64 位 Linux 二进制文件。
+- `traffic-agent-linux-arm64`：ARM 64 位 Linux 二进制文件。
+- `SHA256SUMS`：上述二进制文件的 SHA-256 校验文件。
+
+按架构下载程序和 `SHA256SUMS`，在同一目录执行（arm64 替换文件名）：
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+chmod +x traffic-agent-linux-amd64
+./traffic-agent-linux-amd64 version
+```
+
+另行下载 [systemd 服务文件](deploy/trafficmon-agent.service)，然后继续执行下方“创建节点与安装”。二进制文件不包含节点凭据，`agent.json` 仍从后台创建节点时下载。
+
 ### 构建程序
 
 在安装 Go 1.26+ 的构建机上，从项目根目录执行：
@@ -251,6 +269,29 @@ traffic-agent migrate --legacy-db /旧目录/traffic.db --legacy-settings /旧�
 字节累计在 SQLite 中以 64 位整数保存，JSON 使用十进制字符串；速率单位为字节/秒，时间戳使用 UTC 秒。协议与样例见 [共享类型](packages/contracts/src/index.ts)、[上报 Schema](packages/contracts/report.schema.json) 和 [协议样例](packages/contracts/fixtures/report.json)。
 
 ## 开发检查
+
+### GitHub Actions 构建与发布
+
+工作流见 [.github/workflows/build.yml](.github/workflows/build.yml)，使用仓库内置 `GITHUB_TOKEN`，无需另配镜像仓库密码或 PAT。
+
+| 触发方式 | 中心镜像 | Agent |
+| --- | --- | --- |
+| Pull Request | 构建 amd64 / arm64，执行 amd64 容器启动检查，不推送 | 测试、交叉编译，保存 Actions artifact 14 天 |
+| 推送 `main` | 推送 `ghcr.io/<owner>/<repo>:main` 和 `sha-<短提交号>` | 保存 Actions artifact 14 天 |
+| 推送 `v1.1.0` 等版本标签 | 推送 `:v1.1.0`、`:1.1.0`、`:latest` 和提交标签 | 自动创建 GitHub Release 并上传两个二进制文件、`SHA256SUMS` |
+| Actions → Run workflow，填写版本 | 按所选分支或标签构建，推送填写版本的镜像标签 | 自动创建对应版本的 Release 并上传二进制与校验文件 |
+
+手动发布：进入 **Actions → Build images and agent → Run workflow**，选择要构建的分支或标签，在 `version` 中填写 `1.2.0` 或 `v1.2.0` 后运行。也支持 `1.2.0-rc.1` 等预发布版本；版本格式会在构建前校验，不支持 `+build` 构建元数据。
+
+例如填写 `1.2.0`，会发布镜像 `:v1.2.0`、`:1.2.0`、`:latest`，创建 Release `v1.2.0`，并将 Agent 的 `version` 输出及上报版本设置为 `1.2.0`。无需预先创建 Git 标签，Release 发布时会把新标签指向本次构建的确切提交。已有同名标签必须指向本次构建提交，否则会提前终止，避免将另一份源码的二进制上传到旧版本；复用已有版本时应选择对应标签运行。普通分支和 PR 构建保留源码中的默认 Agent 版本。
+
+镜像名称中的 owner 和 repo 自动转为小写，镜像支持 `linux/amd64` 和 `linux/arm64`。`v1.2.0-rc.1` 等预发布标签会创建预发布 Release，并且不更新 `latest`；主分支镜像始终使用 `main`，正式部署可固定使用版本标签。
+
+发布前会运行中心类型检查、测试和构建，以及 Agent 的 `go vet`、竞态测试和双架构静态编译。中心 amd64 镜像还会使用临时内存数据目录验证非 root、只读根文件系统下的实际启动、SQLite、静态页面、登录和 SSE；arm64 镜像完成构建，不代表已做设备运行验证。任一检查失败时不发布 Release。重新运行相同标签的工作流会更新该 Release 的同名附件。
+
+首次发布后检查仓库的 **Packages** 页面：GHCR 包默认可能是私有的；如需匿名拉取，需将包的可见性设为 Public。若仓库或组织限制了 Actions 的包写入权限，需要在对应设置中允许该工作流发布包。
+
+### 本地检查
 
 从项目根目录执行：
 
