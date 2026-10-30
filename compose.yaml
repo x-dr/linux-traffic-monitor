@@ -1,6 +1,5 @@
 services:
   control:
-    build: .
     image: "${CONTROL_IMAGE:-ghcr.io/x-dr/linux-traffic-monitor:latest}"
     ports:
       - "127.0.0.1:8766:8766"
@@ -11,7 +10,7 @@ services:
       PUBLIC_URL: "${PUBLIC_URL:-http://127.0.0.1:8766}"
       SECURE_COOKIES: "${SECURE_COOKIES:-false}"
     volumes:
-      - control-data:/data
+      - ./data:/data
     read_only: true
     cap_drop:
       - ALL
@@ -20,5 +19,3 @@ services:
     restart: unless-stopped
     tmpfs:
       - /tmp
-volumes:
-  control-data:

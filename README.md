@@ -28,7 +28,7 @@ apps/web/          React 管理后台
 apps/api/          Fastify 中心 API、登录与 SQLite 存储
 packages/contracts/ 共享协议、JSON Schema 与样例
 agent/             Go 采集、存储、上报与迁移程序
-deploy/            Nginx 站点配置、Go Agent systemd 服务
+deploy/            Nginx 站点配置、Go Agent systemd / OpenRC 服务
 scripts/           浏览器验收服务、负载测试与 Docker 启动检查
 docs/              设计、运维与验证文档
 ```
@@ -62,17 +62,18 @@ PUBLIC_URL=http://127.0.0.1:8766 npm start
 
 完整的首次部署、域名与证书配置、Nginx 模板、镜像拉取、升级备份及排障步骤见 [部署指南](docs/deployment.md)。以下为快速启动命令。
 
-需要 Docker Engine 和 Compose 插件。默认使用镜像 `ghcr.io/x-dr/linux-traffic-monitor:latest`，在项目根目录执行以下命令，拉取镜像、初始化管理员并启动中心：
+需要 Docker Engine 和 Compose 插件。默认使用镜像 `ghcr.io/x-dr/linux-traffic-monitor:latest`，仅需下载仓库的 `compose.yaml` 到固定部署目录，无需 Dockerfile 或源码。在该目录执行以下命令，拉取镜像、初始化管理员并启动中心：
 
 ```bash
 docker compose pull control
+sudo install -d -m 700 -o 1000 -g 1000 ./data
 docker compose run --rm --pull never control node apps/api/dist/apps/api/src/admin.js --username admin
 docker compose up -d --no-build control
 docker compose logs --tail=50 control
 curl --fail http://127.0.0.1:8766/health
 ```
 
-管理员初始化仅首次执行。默认绑定宿主机 `127.0.0.1:8766`，中心数据保存在 `control-data` 命名卷中，容器以非 root 用户和只读根文件系统运行。中心本身不采集宿主机指标，需要在每台被监控 VPS 上安装 Agent。
+管理员初始化仅首次执行。默认绑定宿主机 `127.0.0.1:8766`，中心将 Compose 文件所在目录的 `./data` 挂载到容器 `/data`，数据库保存在 `./data/control.db`。容器以非 root 用户（UID/GID `1000:1000`）和只读根文件系统运行，首次启动前用上方命令准备可写目录。已有 `control-data` 命名卷的部署须先按 [迁移步骤](docs/deployment.md#从旧命名卷迁移到项目-data-目录) 转移数据。中心本身不采集宿主机指标，需要在每台被监控 VPS 上安装 Agent。
 
 远程初次访问可通过 SSH 转发：
 
@@ -84,7 +85,7 @@ ssh -L 8766:127.0.0.1:8766 root@你的服务器IP
 
 ### HTTPS 反向代理
 
-在项目根目录 `.env` 中设置浏览器实际访问的 HTTPS 地址：
+在 Compose 文件所在目录的 `.env` 中设置浏览器实际访问的 HTTPS 地址：
 
 ```dotenv
 PUBLIC_URL=https://monitor.example.com
@@ -101,7 +102,7 @@ Compose 会读取 `.env`；修改后执行 `docker compose up -d --no-build cont
 
 升级至磁盘历史版本时，应先升级中心，再更新 Agent 至 1.1.0。两端数据库会增量升级至 v2，保留原有网卡流量、节点、配置与登录数据；中心继续接受旧 Agent 上报。磁盘读写历史从新 Agent 开始采集后产生，安装前的数据无法追溯。详细步骤见 [升级磁盘历史功能](docs/operations.md#升级磁盘历史功能)。
 
-运行中的 SQLite 应使用备份 API 生成一致性备份，或停止对应服务后完整复制数据目录；Agent 数据也应单独备份。保留 `control-data` 卷，勿使用会删除卷的 `docker compose down -v`。
+运行中的 SQLite 应使用备份 API 生成一致性备份，或停止对应服务后完整复制 `./data` 目录；Agent 数据也应单独备份。迁移前的 `control-data` 旧卷应保留用于回退，勿使用会删除卷的 `docker compose down -v`。
 
 ## 接入 Go Agent
 
@@ -121,7 +122,7 @@ chmod +x traffic-agent-linux-amd64
 ./traffic-agent-linux-amd64 version
 ```
 
-另行下载 [systemd 服务文件](deploy/trafficmon-agent.service)，然后继续执行下方“创建节点与安装”。二进制文件不包含节点凭据，`agent.json` 仍从后台创建节点时下载。
+Debian / Ubuntu 等系统另行下载 [systemd 服务文件](deploy/trafficmon-agent.service)，然后继续执行下方“创建节点与安装”；**Alpine Linux 使用 [OpenRC 服务文件](deploy/trafficmon-agent.openrc)，按 [Alpine 安装步骤](docs/operations.md#alpine-linuxopenrc) 操作**。发布程序以 `CGO_ENABLED=0` 构建，Alpine 可使用相同架构的二进制，无需安装 Go 或 glibc。二进制文件不包含节点凭据，`agent.json` 仍从后台创建节点时下载。
 
 ### 构建程序
 
@@ -142,7 +143,7 @@ cd ..
 
 登录后台，打开“接入 VPS”创建节点并下载 `agent.json`。每个节点有独立凭据，**仅在创建时展示一次**，中心只保存凭据摘要。配置中的 `server_url` 来自当前页面地址，传至 VPS 前需确认它是该 VPS 可达的 HTTPS 地址。HTTP 仅允许 `localhost`、`127.0.0.1` 和 `::1` 本机调试。
 
-将程序、下载的配置和 [systemd 服务文件](deploy/trafficmon-agent.service) 安全传到 VPS。同名系统用户已存在时跳过第一条；arm64 VPS 将程序文件名改为 `traffic-agent-linux-arm64`：
+以下命令适用于 systemd 系统；Alpine Linux 请使用 [OpenRC 安装步骤](docs/operations.md#alpine-linuxopenrc)。将程序、下载的配置和 [systemd 服务文件](deploy/trafficmon-agent.service) 安全传到 VPS。同名系统用户已存在时跳过第一条；arm64 VPS 将程序文件名改为 `traffic-agent-linux-arm64`：
 
 ```bash
 sudo useradd --system --home-dir /var/lib/trafficmon-agent --shell /usr/sbin/nologin trafficagent

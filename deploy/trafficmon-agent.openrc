@@ -1,0 +1,26 @@
+#!/sbin/openrc-run
+
+description="Observatory VPS monitoring Agent"
+supervisor="supervise-daemon"
+command="/usr/local/bin/traffic-agent"
+command_args="run --config /etc/trafficmon/agent.json"
+command_user="trafficagent:trafficagent"
+directory="/var/lib/trafficmon-agent"
+pidfile="/run/${RC_SVCNAME}.pid"
+required_files="/etc/trafficmon/agent.json"
+respawn_delay=5
+respawn_max=0
+umask=0077
+output_log="/var/log/trafficmon-agent/agent.log"
+error_log="${output_log}"
+
+depend() {
+	need net
+	after firewall
+}
+
+start_pre() {
+	checkpath --directory --mode 0700 --owner trafficagent:trafficagent \
+		/etc/trafficmon /var/lib/trafficmon-agent /var/log/trafficmon-agent || return 1
+	checkpath --file --mode 0600 --owner trafficagent:trafficagent "${output_log}"
+}

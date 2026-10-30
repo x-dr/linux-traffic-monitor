@@ -9,7 +9,7 @@
 - 将域名 A 记录解析到中心 VPS 的公网 IPv4。设置 AAAA 记录时，IPv6 也必须能访问该 VPS。
 - 在云安全组和宿主机防火墙中允许 TCP `80`、`443`，保留自己的 SSH 管理端口。`80` 用于证书验证和 HTTPS 跳转。
 - 安装 Docker Engine 与 Compose 插件，步骤见 Docker 官方 [Ubuntu 安装指南](https://docs.docker.com/engine/install/ubuntu/) 或 [Debian 安装指南](https://docs.docker.com/engine/install/debian/)。
-- 将本仓库源码上传或克隆到固定目录，后续命令均在该目录执行。默认拉取 `ghcr.io/x-dr/linux-traffic-monitor:latest`，宿主机无需安装 Node.js 或 Go。
+- 将本仓库的 `compose.yaml` 保存到固定部署目录，后续命令均在该目录执行。默认拉取 `ghcr.io/x-dr/linux-traffic-monitor:latest`，无需 Dockerfile、项目源码或宿主机上的 Node.js / Go；从源码构建时才需要完整仓库。
 
 检查 Docker，并安装代理与证书工具：
 
@@ -27,7 +27,7 @@ sudo systemctl enable --now nginx cron
 
 ## 2. 配置中心地址
 
-在仓库根目录创建或编辑 `.env`，保留已有配置：
+在 Compose 文件所在目录创建或编辑 `.env`，保留已有配置：
 
 ```bash
 touch .env
@@ -53,19 +53,20 @@ Compose 默认值与生产配置的关系如下：
 | `CONTROL_IMAGE` | `ghcr.io/x-dr/linux-traffic-monitor:latest` | Compose 使用的中心镜像，默认直接拉取 |
 | 宿主机端口 | `127.0.0.1:8766` | 由同机 Nginx 访问，保持回环绑定 |
 | 容器监听 | `0.0.0.0:8766` | 由 Compose 配置，无需修改 |
-| 数据库 | 容器内 `/data/control.db` | 持久化于 `control-data` 命名卷 |
+| 数据库 | 容器内 `/data/control.db` | 挂载至 Compose 文件同目录的 `./data/control.db` |
 | `PUBLIC_URL` | `http://127.0.0.1:8766` | 在 `.env` 中改为实际 HTTPS 地址 |
 | `SECURE_COOKIES` | `false` | 公网 HTTPS 部署显式设为 `true` |
 
-根目录 `.env` 由 Compose 读取；直接运行 `npm start` 不会自动加载它。修改 `.env` 后使用 `docker compose up -d --no-build control` 重建容器配置，单纯 `restart` 不会更新环境变量。
+部署目录的 `.env` 由 Compose 读取；直接运行 `npm start` 不会自动加载它。修改 `.env` 后使用 `docker compose up -d --no-build control` 重建容器配置，单纯 `restart` 不会更新环境变量。
 
 ## 3. 拉取镜像并启动中心
 
-使用镜像 `ghcr.io/x-dr/linux-traffic-monitor:latest`，拉取后初始化管理员并启动：
+首次部署使用镜像 `ghcr.io/x-dr/linux-traffic-monitor:latest`，拉取后准备数据目录、初始化管理员并启动。已有命名卷的部署先按下方迁移步骤转移数据：
 
 ```bash
 docker compose config --quiet
 docker compose pull control
+sudo install -d -m 700 -o 1000 -g 1000 ./data
 
 # 仅首次部署执行：交互式隐藏输入密码，长度为 12～256 个字符
 docker compose run --rm --pull never control node apps/api/dist/apps/api/src/admin.js --username admin
@@ -76,31 +77,41 @@ docker compose logs --tail=50 control
 curl --fail --show-error http://127.0.0.1:8766/health
 ```
 
-健康检查应返回 `{"ok":true}`；容器内置的健康检查每 30 秒执行一次，刚启动时可能显示 `starting`。管理员初始化使用同一个命名卷，没有默认密码；已有管理员时跳过初始化，通过后台“设置”修改密码。不要将密码写入命令参数、`.env` 或脚本。
+健康检查应返回 `{"ok":true}`；容器内置的健康检查每 30 秒执行一次，刚启动时可能显示 `starting`。管理员初始化与中心使用同一个 `./data` 目录，没有默认密码；已有管理员时跳过初始化，通过后台“设置”修改密码。不要将密码写入命令参数、`.env` 或脚本。
 
-中心容器以非 root 用户运行，根文件系统只读，`/data` 为可写持久化卷，`/tmp` 为临时内存文件系统。通常无需手工修改卷所有者。出现权限错误时先确认挂载位置和容器用户，不要将整个数据目录改为 `777`。
+中心容器以非 root 用户（UID/GID `1000:1000`）运行，根文件系统只读，项目的 `./data` 绑定挂载至容器 `/data`，`/tmp` 为临时内存文件系统。绑定挂载使用宿主机目录权限，镜像中 `/data` 的所有者不会自动应用到宿主机目录；首次启动前执行上方 `install` 命令，以免 Docker 自动创建 root 所有的目录导致 SQLite 无法写入。已有数据时还需检查数据库及 WAL / SHM 文件均对该用户可写，不要将整个数据目录改为 `777`。
 
-命名卷实际名称通常带 Compose 项目前缀。后续操作保持同一项目目录及相同的 `-p` / `COMPOSE_PROJECT_NAME`；改变项目名可能连接到新卷，表现为管理员与节点全部为空。
+`./data` 相对于 Compose 文件所在目录解析。在 `/root/linux-traffic-monitor` 部署时，数据库位于宿主机 `/root/linux-traffic-monitor/data/control.db`。后续保持同一部署目录；更换目录时须同时迁移 `data`，否则会连接到空库。
 
 公开镜像可以匿名拉取；私有镜像需先通过 `docker login ghcr.io` 按提示认证。后续启动使用 `--no-build`，升级先执行 `docker compose pull control`，确保使用仓库中的发布镜像。
 
+### 从旧命名卷迁移到项目 data 目录
+
+挂载方式切换不会自动复制旧卷的数据。已有管理员、节点或历史时，按以下顺序迁移：
+
+1. 保留旧 Compose 文件及其项目名，仍使用旧挂载配置执行 `docker compose stop control`，再按 [备份步骤](#停中心后备份整个数据目录) 导出完整 `/data` 并校验归档。这些备份命令同样适用于旧命名卷；迁移时跳过示例中的 `docker compose start control`，保持中心停止直到第 4 步，避免恢复期间旧库继续写入。
+2. 在 Compose 文件同目录准备空的 `data` 目录；已有同名目录时先确认内容，保留原数据并使用另一个空目录恢复，避免覆盖。
+3. 将备份中的全部文件恢复到目标目录，包括仍存在的 `control.db-wal`、`control.db-shm`，再将该目录及恢复文件的所有者设为 `1000:1000`，目录权限设为 `700`。
+4. 将 `control` 的挂载改为 `./data:/data`（恢复到其他目录时使用对应路径），删除不再使用的顶层 `volumes: control-data:` 配置，再执行 `docker compose up -d --no-build control`。
+5. 核对原管理员、节点和历史。保留旧命名卷和备份以便回退，不重新初始化管理员。
+
 ### 可选：从源码构建
 
-需要运行自行修改的源码时，将 `.env` 中的 `CONTROL_IMAGE` 改为本地镜像名：
+需要运行自行修改的源码时，准备完整仓库（包含 Dockerfile），并将仓库根目录 `.env` 中的 `CONTROL_IMAGE` 改为本地镜像名：
 
 ```dotenv
 CONTROL_IMAGE=linux-traffic-monitor:control
 ```
 
-然后构建并启动；首次部署仍需在启动前执行前文的管理员初始化命令：
+然后构建并启动；首次部署仍需在启动前按前文准备 `./data` 并初始化管理员：
 
 ```bash
-docker compose build control
+docker build -t linux-traffic-monitor:control .
 # 首次部署时，在这里初始化管理员
 docker compose up -d --no-build control
 ```
 
-源码构建沿用 Compose 的端口、数据卷和运行约束，不需要额外的覆盖文件。镜像发布标签说明见 [README](../README.md#github-actions-构建与发布)。
+构建标签必须与 `.env` 中的 `CONTROL_IMAGE` 一致。默认 Compose 不含 `build` 配置，使用本地镜像时先显式执行 `docker build`，再沿用 Compose 的端口、数据卷和运行约束。镜像发布标签说明见 [README](../README.md#github-actions-构建与发布)。
 
 ## 4. 配置 Nginx 与 HTTPS
 
@@ -200,6 +211,8 @@ sudo -H /root/.acme.sh/acme.sh --cron --home /root/.acme.sh
 
 每台被监控 VPS（包括需要监控的中心宿主机）都要单独安装 Agent。仅运行中心容器不会采集宿主机指标。Agent 主动通过 HTTPS 上报，无需开放入站端口。
 
+Alpine Linux VPS 请使用 [OpenRC Agent 安装步骤](operations.md#alpine-linuxopenrc) 和 [OpenRC 服务文件](../deploy/trafficmon-agent.openrc)，其中包含 Alpine 的依赖、系统用户、单次上报及开机启动命令。
+
 `agent.json` 中的 `server_url` 来自下载配置时浏览器的来源，应为最终可达的 HTTPS 地址。Agent 不跟随重定向；不要填写 HTTP 跳转地址。配置权限须为 `0600`，服务用户须能写入配置目录及 `/var/lib/trafficmon-agent`，以便保存下发配置和断网数据。不要在常驻服务运行时对同一个数据目录重复执行 `--once`。
 
 ### 部署验收
@@ -213,7 +226,7 @@ sudo -H /root/.acme.sh/acme.sh --cron --home /root/.acme.sh
 
 ## 6. 备份、升级与恢复
 
-### 停中心后备份整个数据卷
+### 停中心后备份整个数据目录
 
 以下命令只在执行时停止中心，不停止各 VPS Agent；Agent 会保留本地数据等待恢复后补传。备份可能包含会话和节点配置，应限制访问。
 
@@ -231,11 +244,11 @@ docker compose images control > "$backup_dir/images.txt"
 
 确认归档命令和 `tar` 校验均成功后再升级；若备份失败，先恢复中心运行并处理失败原因。此方式在中心停止后复制整个 `/data`，包括仍存在的 SQLite WAL / SHM 文件；不要在运行时只复制 `control.db`。如不能停服务，使用 SQLite 的一致性备份 API。
 
-中心卷与 Agent 的 `/var/lib/trafficmon-agent`、`/etc/trafficmon/agent.json` 分别备份。保留命名卷，不执行 `docker compose down -v`。示例把备份保存在仓库之外，避免提交或进入镜像构建上下文；还应将备份另存到服务器外。
+中心的 `./data` 目录与 Agent 的 `/var/lib/trafficmon-agent`、`/etc/trafficmon/agent.json` 分别备份。保留迁移前的旧命名卷，不执行 `docker compose down -v`。示例把备份保存在仓库之外，避免提交或进入镜像构建上下文；还应将备份另存到服务器外。
 
 ### 升级
 
-先完成备份，保持项目目录、项目名和数据卷不变。默认镜像使用 `latest`，升级时重新拉取并重建容器：
+先完成备份，保持项目目录和 `./data` 挂载路径不变。默认镜像使用 `latest`，升级时重新拉取并重建容器：
 
 ```bash
 docker compose pull control
@@ -245,13 +258,13 @@ docker compose logs --tail=50 control
 curl --fail --show-error https://monitor.example.com/health
 ```
 
-`latest` 会随正式发布变化，回退时使用备份记录中的旧镜像 ID 或提前保存的镜像。源码构建部署则先更新源码，保持 `.env` 中的本地镜像名，执行 `docker compose build control` 后再按上方命令启动并检查，跳过拉取步骤。
+`latest` 会随正式发布变化，回退时使用备份记录中的旧镜像 ID 或提前保存的镜像。源码构建部署则先更新源码，保持 `.env` 中的本地镜像名，执行 `docker build -t linux-traffic-monitor:control .`（标签与 `CONTROL_IMAGE` 一致）后再按上方命令启动并检查，跳过拉取步骤。
 
 升级不重新初始化管理员。需要更新 Agent 时先更新中心，再逐台更新 Agent；磁盘历史版本的兼容与回退要求见 [运行指南](operations.md#升级磁盘历史功能)。
 
 ### 恢复与回退
 
-使用与备份匹配的程序或镜像版本，先停止中心。为备份准备一个**新的空卷**，解压完整归档并确保 `/data` 对容器内 `node` 用户（UID/GID `1000:1000`）可写，再将 Compose 的 `control-data` 指向该卷并启动。保留原卷，避免解压覆盖现有数据；不要仅换回旧程序却继续使用已升级的新库。
+使用与备份匹配的程序或镜像版本，先停止中心。为备份准备一个**新的空目录**，解压完整归档，将目录及恢复文件的所有者设为 `1000:1000`、目录权限设为 `700`，再将 Compose 中 `./data:/data` 左侧的宿主机路径指向恢复目录并启动。保留原数据目录，避免解压覆盖现有数据；不要仅换回旧程序却继续使用已升级的新库。
 
 启动后按前文重新验证管理员、节点、历史与 Agent 补传。若恢复点早于 Agent 最近一次同步，已确认数据不会保证自动重传；需要同时评估并恢复相应 Agent 备份。
 
@@ -259,12 +272,14 @@ curl --fail --show-error https://monitor.example.com/health
 
 | 现象 | 检查与处理 |
 | --- | --- |
+| 初始化时提示 `Dockerfile: no such file or directory` | 镜像部署的 Compose 不应包含 `build`；删除旧配置中 `control` 下的整个 `build` 项，再执行 `docker compose pull control` 后初始化。`--pull never` 仅禁止拉取镜像，不禁止构建 |
 | Nginx 返回 502 | 检查 `docker compose ps`、中心日志及宿主机 `curl http://127.0.0.1:8766/health`；确认 Nginx 与中心在同一宿主机，或使用了正确的 Docker 网络上游 |
 | `nginx -t` 提示证书不存在 | 先使用 HTTP 模板申请证书，再执行 acme.sh `--install-cert`，核对 `/etc/nginx/ssl/<实际域名>/` 下的安装文件后切换 HTTPS |
 | 证书申请失败或公网超时 | 核对 A / AAAA、80 端口、安全组、防火墙及是否有 CDN 拦截 ACME 路径 |
 | 登录 / 写操作提示来源不匹配 | 核对浏览器实际地址与 `.env` 的 `PUBLIC_URL`，修改后 `docker compose up -d --no-build control`；不要去掉 Origin / CSRF 校验 |
 | 登录后仍提示未登录 | 检查浏览器 Cookie 与 HTTPS 访问地址；生产配置 `SECURE_COOKIES=true` 时不能通过普通 HTTP 使用会话 |
-| 提示管理员未初始化或原节点不见了 | 检查 Compose 项目名、命名卷和 `/data/control.db` 挂载，确认连接的是原数据卷后再判断是否首次初始化 |
+| 提示管理员未初始化或原节点不见了 | 检查 `./data` 的实际宿主机路径和 `/data/control.db` 挂载，确认连接的是原数据目录；旧命名卷的数据须先迁移 |
+| SQLite 提示无法打开数据库或只读 | 检查 `./data` 是否已创建，以及目录、数据库和 WAL / SHM 文件是否对容器用户 `1000:1000` 可写；不要用 root 运行服务或将目录改为 `777` |
 | 实时数据延迟、SSE 断开 | 检查 Nginx / CDN 的缓冲、压缩、缓存与空闲超时；登录后在 Network 查看 SSE 事件，会话到期后重新登录 |
 | Agent 上报 HTTP 413 | 确认所有代理请求体限制不小于 `2m`；中心自身仍限制为 2 MiB |
 | Agent 上报 401 / 403 或节点离线 | 确认使用该节点的配置、节点未停用/归档、服务器时钟正常；检查 `sudo journalctl -u trafficmon-agent --no-pager -n 50` |
