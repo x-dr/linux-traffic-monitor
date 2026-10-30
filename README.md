@@ -274,18 +274,13 @@ traffic-agent migrate --legacy-db /旧目录/traffic.db --legacy-settings /旧�
 
 工作流见 [.github/workflows/build.yml](.github/workflows/build.yml)，使用仓库内置 `GITHUB_TOKEN`，无需另配镜像仓库密码或 PAT。
 
-| 触发方式 | 中心镜像 | Agent |
-| --- | --- | --- |
-| Pull Request | 构建 amd64 / arm64，执行 amd64 容器启动检查，不推送 | 测试、交叉编译，保存 Actions artifact 14 天 |
-| 推送 `main` | 推送 `ghcr.io/<owner>/<repo>:main` 和 `sha-<短提交号>` | 保存 Actions artifact 14 天 |
-| 推送 `v1.1.0` 等版本标签 | 推送 `:v1.1.0`、`:1.1.0`、`:latest` 和提交标签 | 自动创建 GitHub Release 并上传两个二进制文件、`SHA256SUMS` |
-| Actions → Run workflow，填写版本 | 按所选分支或标签构建，推送填写版本的镜像标签 | 自动创建对应版本的 Release 并上传二进制与校验文件 |
+工作流仅支持手动触发；推送分支、推送标签以及创建或更新 PR 均不会自动运行。手动运行时会构建 amd64 / arm64 中心镜像并推送到 GHCR，创建对应版本的 Release 并上传两个 Agent 二进制文件和 `SHA256SUMS`；同时保存 Actions artifact 14 天。
 
 手动发布：进入 **Actions → Build images and agent → Run workflow**，选择要构建的分支或标签，在 `version` 中填写 `1.2.0` 或 `v1.2.0` 后运行。也支持 `1.2.0-rc.1` 等预发布版本；版本格式会在构建前校验，不支持 `+build` 构建元数据。
 
-例如填写 `1.2.0`，会发布镜像 `:v1.2.0`、`:1.2.0`、`:latest`，创建 Release `v1.2.0`，并将 Agent 的 `version` 输出及上报版本设置为 `1.2.0`。无需预先创建 Git 标签，Release 发布时会把新标签指向本次构建的确切提交。已有同名标签必须指向本次构建提交，否则会提前终止，避免将另一份源码的二进制上传到旧版本；复用已有版本时应选择对应标签运行。普通分支和 PR 构建保留源码中的默认 Agent 版本。
+例如填写 `1.2.0`，会发布镜像 `:v1.2.0`、`:1.2.0`、`:latest`，创建 Release `v1.2.0`，并将 Agent 的 `version` 输出及上报版本设置为 `1.2.0`。无需预先创建 Git 标签，Release 发布时会把新标签指向本次构建的确切提交。已有同名标签必须指向本次构建提交，否则会提前终止，避免将另一份源码的二进制上传到旧版本；复用已有版本时应选择对应标签运行。本地构建未注入版本时保留源码中的默认 Agent 版本。
 
-镜像名称中的 owner 和 repo 自动转为小写，镜像支持 `linux/amd64` 和 `linux/arm64`。`v1.2.0-rc.1` 等预发布标签会创建预发布 Release，并且不更新 `latest`；主分支镜像始终使用 `main`，正式部署可固定使用版本标签。
+镜像名称中的 owner 和 repo 自动转为小写，镜像支持 `linux/amd64` 和 `linux/arm64`。`1.2.0-rc.1` 等预发布版本会创建预发布 Release，并且不更新 `latest`；选择 `main` 分支手动运行时还会生成 `:main` 镜像标签，每次运行也会生成 `sha-<短提交号>` 标签，正式部署可固定使用版本标签。
 
 发布前会运行中心类型检查、测试和构建，以及 Agent 的 `go vet`、竞态测试和双架构静态编译。中心 amd64 镜像还会使用临时内存数据目录验证非 root、只读根文件系统下的实际启动、SQLite、静态页面、登录和 SSE；arm64 镜像完成构建，不代表已做设备运行验证。任一检查失败时不发布 Release。重新运行相同标签的工作流会更新该 Release 的同名附件。
 
