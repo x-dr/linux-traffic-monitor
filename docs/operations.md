@@ -27,6 +27,8 @@ npm start
 
 ## Docker 中心
 
+首次部署、完整 Nginx 配置、acme.sh 证书申请与续期、GHCR 镜像使用及备份步骤见 [Docker 与 Nginx 部署指南](deployment.md)。
+
 以下命令会构建镜像、创建持久化卷并启动中心服务：
 
 ```bash
@@ -43,19 +45,7 @@ PUBLIC_URL=https://monitor.example.com
 SECURE_COOKIES=true
 ```
 
-反向代理需要保留 Host，设置 X-Forwarded-Proto，关闭 SSE 缓冲：
-
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:8766;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_read_timeout 60s;
-}
-```
+反向代理使用 [正式 Nginx 模板](../deploy/nginx.conf)，保留 Host，设置 X-Forwarded-Proto，并关闭 SSE 缓冲；首次申请证书请按 [HTTPS 部署步骤](deployment.md#4-配置-nginx-与-https) 操作。
 
 中心镜像使用非 root 用户，卷保存 SQLite 数据。不要运行 `docker compose down -v`，它会删除卷。升级前应通过 SQLite 备份 API 或停服务后的完整复制保留数据库。
 

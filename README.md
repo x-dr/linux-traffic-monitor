@@ -17,7 +17,7 @@
 
 中心超过 15 秒未收到上报，或采样数据超过 15 秒未更新时标为“数据陈旧”；超过 45 秒未收到上报标为“离线”。仅在线节点计入总实时速率。
 
-相关文档：[运行与迁移指南](docs/operations.md) · [升级设计方案](docs/multi-vps-upgrade-plan.md) · [已有验证记录与边界](docs/verification.md)。
+相关文档：[部署指南（Docker + Nginx）](docs/deployment.md) · [运行与迁移指南](docs/operations.md) · [升级设计方案](docs/multi-vps-upgrade-plan.md) · [已有验证记录与边界](docs/verification.md)。
 
 网卡与磁盘历史的页面布局和统计口径见 [历史监控设计](docs/history-io-design.md)。
 
@@ -28,7 +28,7 @@ apps/web/          React 管理后台
 apps/api/          Fastify 中心 API、登录与 SQLite 存储
 packages/contracts/ 共享协议、JSON Schema 与样例
 agent/             Go 采集、存储、上报与迁移程序
-deploy/            Go Agent systemd 服务
+deploy/            Nginx 站点配置、Go Agent systemd 服务
 scripts/           浏览器验收服务、负载测试与 Docker 启动检查
 docs/              设计、运维与验证文档
 ```
@@ -60,6 +60,8 @@ PUBLIC_URL=http://127.0.0.1:8766 npm start
 
 ## Docker Compose 部署中心
 
+完整的首次部署、域名与证书配置、Nginx 模板、镜像拉取、升级备份及排障步骤见 [部署指南](docs/deployment.md)。以下为快速启动命令。
+
 需要 Docker Engine 和 Compose 插件。在项目根目录执行以下命令，构建镜像、初始化管理员并启动中心：
 
 ```bash
@@ -89,21 +91,9 @@ PUBLIC_URL=https://monitor.example.com
 SECURE_COOKIES=true
 ```
 
-Compose 会读取 `.env`；修改后执行 `docker compose up -d control` 使配置生效。域名的 HTTPS 反向代理示例：
+Compose 会读取 `.env`；修改后执行 `docker compose up -d control` 使配置生效。按照 [Nginx 与 HTTPS 部署步骤](docs/deployment.md#4-配置-nginx-与-https)，使用 acme.sh 申请并自动续期证书，依次使用 [HTTP 证书验证模板](deploy/nginx-http.conf) 和 [正式 HTTPS 模板](deploy/nginx.conf)。正式配置包含 SSE 缓冲处理及 Agent 上报大小限制。
 
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:8766;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_read_timeout 60s;
-}
-```
-
-将此配置放入已配置证书的 HTTPS 站点。`PUBLIC_URL` 的协议、域名和端口必须与浏览器访问来源一致，否则登录或写操作会返回来源校验错误。
+`PUBLIC_URL` 的协议、域名和端口必须与浏览器访问来源一致，否则登录或写操作会返回来源校验错误。
 
 ### 升级与备份
 
