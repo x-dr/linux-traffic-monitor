@@ -1,0 +1,27 @@
+{
+  "protocol_version": 1,
+  "source_id": "11111111-1111-4111-8111-111111111111",
+  "snapshot": {
+    "observed_at": 1793380020, "revision": 3,
+    "hostname": "example-vps", "os": "Debian 12", "arch": "amd64", "kernel": "6.1.0", "agent_version": "1.0.0",
+    "cpu_cores": 2, "uptime_seconds": 86400,
+    "cpu_percent": 23.5, "memory_percent": 42.0, "swap_percent": 0,
+    "memory_total": "2147483648", "memory_available": "1245540515", "swap_total": "0",
+    "load": [0.42, 0.31, 0.25], "rx_bps": 1048576, "tx_bps": 524288,
+    "interfaces": ["ens3"], "selected_interfaces": ["ens3"], "readable_interfaces": ["ens3"],
+    "disks": [{ "mount": "/", "fs": "ext4", "total_bytes": "42949672960", "used_bytes": "10737418240", "free_bytes": "32212254720", "used_percent": 25 }],
+    "error": null
+  },
+  "traffic": [{ "interface": "ens3", "minute_ts": 1793380020, "revision": 1, "rx_bytes": "1048576", "tx_bytes": "524288" }],
+  "resources": [{ "minute_ts": 1793380020, "revision": 2, "values": {
+    "cpu_percent": { "avg": 23.5, "max": 30, "count": 12 },
+    "memory_percent": { "avg": 42, "max": 43, "count": 12 },
+    "swap_percent": { "avg": 0, "max": 0, "count": 12 },
+    "load1": { "avg": 0.42, "max": 0.7, "count": 12 },
+    "rx_bps": { "avg": 1048576, "max": 2097152, "count": 12 },
+    "tx_bps": { "avg": 524288, "max": 1048576, "count": 12 }
+  } }],
+  "totals": [{ "interface": "ens3", "revision": 3, "rx_bytes": "1048576", "tx_bytes": "524288" }],
+  "applied_config_version": 0,
+  "config_error": null
+}

@@ -1,0 +1,23 @@
+{
+  "name": "linux-traffic-monitor",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web 'npm run dev -w @traffic/api' 'npm run dev -w @traffic/web'",
+    "build": "npm run build -w @traffic/contracts && npm run build -w @traffic/web && npm run build -w @traffic/api",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tools.json",
+    "test": "node --import tsx --test --test-isolation=none apps/api/test/*.test.ts",
+    "test:e2e": "playwright test",
+    "start": "node apps/api/dist/apps/api/src/main.js",
+    "admin": "tsx apps/api/src/admin.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": { "node": ">=24" }
+}

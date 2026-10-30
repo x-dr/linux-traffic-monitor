@@ -1,0 +1,41 @@
+.history-toolbar { margin-top: 30px; margin-bottom: 10px; flex-wrap: wrap; }
+.history-toolbar h2 { margin: 7px 0 0; font-size: 19px; }
+.history-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.history-granularity { width: 145px; }
+.history-context { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 10px; line-height: 1.8; margin-bottom: 20px; }
+.history-panel-heading { flex-wrap: wrap; align-items: flex-start; margin-bottom: 20px; }
+.history-panel-heading > div:first-child { flex-shrink: 0; }
+.history-device-select { width: 195px; max-width: 100%; }
+.history-panel-heading .history-controls { justify-content: flex-end; }
+.history-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+.history-summary-item, .history-sampling { min-width: 0; }
+.history-summary-item > span, .history-sampling > span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 10px; }
+.history-summary-item strong { display: block; font-size: clamp(16px,1.6vw,25px); font-weight: 550; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.history-accent-mint strong { color: var(--mint); }
+.history-accent-blue strong { color: #789cff; }
+.history-accent-amber strong { color: #f6bd68; }
+.history-accent-violet strong { color: #b299ff; }
+:root[data-theme='light'] .history-accent-mint strong { color: #15856c; }
+:root[data-theme='light'] .history-accent-blue strong { color: #4668c7; }
+:root[data-theme='light'] .history-accent-amber strong { color: #9a6605; }
+:root[data-theme='light'] .history-accent-violet strong { color: #7650bb; }
+.history-sampling strong { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.8; }
+.history-note { color: var(--muted); font-size: 10px; line-height: 1.9; margin: 10px 0 0; overflow-wrap: anywhere; }
+.history-empty, .history-loading { min-height: 260px; display: grid; align-items: center; }
+.disk-history-panel { margin-bottom: 22px; }
+.node-history > [role="alert"] { margin-bottom: 20px; }
+@media (max-width: 600px) {
+  .history-toolbar { align-items: stretch; }
+  .history-toolbar > .history-controls { width: 100%; gap: 10px; }
+  .history-toolbar > .history-controls > :first-child { max-width: 100%; }
+  .history-panel-heading .history-controls { justify-content: flex-start; width: 100%; }
+  .history-panel-heading .history-device-select { width: 175px; flex: 1 1 150px; }
+  .history-summary { gap: 10px; }
+  .history-summary-item > span, .history-sampling > span { font-size: 10px; margin-bottom: 8px; }
+  .history-summary-item strong { font-size: clamp(14px,4.3vw,20px); }
+  .disk-history-panel .history-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .history-sampling { grid-column: 1/-1; display: flex; align-items: baseline; gap: 14px; }
+  .history-sampling > span { margin: 0; }
+  .history-empty, .history-loading { min-height: 230px; }
+  .disk-history-panel { margin-bottom: 17px; }
+}

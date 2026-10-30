@@ -1,0 +1,24 @@
+services:
+  control:
+    build: .
+    image: linux-traffic-monitor:control
+    ports:
+      - "127.0.0.1:8766:8766"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8766"
+      DB_PATH: /data/control.db
+      PUBLIC_URL: "${PUBLIC_URL:-http://127.0.0.1:8766}"
+      SECURE_COOKIES: "${SECURE_COOKIES:-false}"
+    volumes:
+      - control-data:/data
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+volumes:
+  control-data:

@@ -1,0 +1,14 @@
+node_modules/
+**/dist/
+data/
+control-data/
+.env
+.env.*
+agent.json
+*.db
+*.db-wal
+*.db-shm
+agent/bin/
+test-results/
+playwright-report/
+artifacts/

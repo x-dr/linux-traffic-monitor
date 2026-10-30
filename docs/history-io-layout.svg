@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="990" viewBox="0 0 1280 990">
+  <style>text{font-family:system-ui,'Noto Sans CJK SC',sans-serif;fill:#e8edf5} .muted{fill:#91a1b8;font-size:13px}.label{font-size:12px;letter-spacing:1px;fill:#91a1b8}.heading{font-size:21px;font-weight:600}.value{font-size:23px;font-weight:600}.panel{fill:#121c2d;stroke:#263449}.control{fill:#1c2940;stroke:#34435c}.grid{stroke:#263449;stroke-dasharray:4 5}</style>
+  <rect width="1280" height="990" fill="#0c1220"/>
+  <text x="48" y="43" class="muted">OBSERVATORY / 节点详情</text>
+  <text x="48" y="86" font-size="30" font-weight="600">东京 · 核心节点</text>
+  <text x="48" y="115" class="muted">运行监控　　系统信息　　节点设置</text>
+  <path d="M48 131H1232" stroke="#263449"/>
+  <text x="48" y="170" class="label">历史趋势</text>
+  <rect x="510" y="145" width="520" height="39" rx="8" class="control"/>
+  <rect x="714" y="149" width="102" height="31" rx="5" fill="#274b48"/>
+  <text x="531" y="170" font-size="13">1 小时　　6 小时　　24 小时　　7 天　　30 天</text>
+  <rect x="1045" y="145" width="187" height="39" rx="8" class="control"/>
+  <text x="1065" y="170" font-size="13">自动聚合（分钟/小时）⌄</text>
+  <rect x="48" y="205" width="1184" height="340" rx="12" class="panel"/>
+  <text x="73" y="239" class="heading">网卡流量历史</text>
+  <rect x="710" y="218" width="255" height="36" rx="7" class="control"/>
+  <text x="729" y="242" font-size="13">全部历史监控网卡 ⌄</text>
+  <rect x="980" y="218" width="226" height="36" rx="7" class="control"/>
+  <text x="1002" y="242" font-size="13">速率　　　流量</text>
+  <text x="73" y="281" class="muted">区间下载</text><text x="285" y="281" class="muted">区间上传</text><text x="500" y="281" class="muted">区间合计</text>
+  <text x="73" y="312" class="value" fill="#53d6b5">28.6 GiB</text><text x="285" y="312" class="value">9.2 GiB</text><text x="500" y="312" class="value">37.8 GiB</text>
+  <path d="M110 355H1195M110 404H1195M110 453H1195" class="grid"/>
+  <text x="73" y="356" class="muted">4 MiB</text><text x="73" y="405" class="muted">2 MiB</text><text x="91" y="454" class="muted">0</text>
+  <path d="M110 432L170 420L230 435L290 385L350 402L410 361L470 393L530 380L590 404L650 375L710 349L770 395L830 379L890 395L950 354L1010 388L1070 371L1130 397L1195 379" fill="none" stroke="#53d6b5" stroke-width="3"/>
+  <path d="M110 446L170 441L230 444L290 420L350 433L410 410L470 423L530 415L590 433L650 419L710 411L770 429L830 417L890 427L950 414L1010 427L1070 417L1130 433L1195 420" fill="none" stroke="#789cff" stroke-width="3"/>
+  <text x="110" y="485" class="muted">昨天 22:00</text><text x="620" y="485" class="muted">今天 10:00</text><text x="1110" y="485" class="muted">今天 22:00</text>
+  <text x="73" y="520" class="muted">下载 / 上传 · 依照所选网卡汇总，保留历史监控记录</text>
+  <rect x="48" y="568" width="1184" height="340" rx="12" class="panel"/>
+  <text x="73" y="604" class="heading">硬盘读写历史</text>
+  <rect x="950" y="582" width="255" height="36" rx="7" class="control"/>
+  <text x="970" y="606" font-size="13">全部整盘 ⌄</text>
+  <text x="73" y="647" class="muted">区间读取</text><text x="285" y="647" class="muted">区间写入</text><text x="500" y="647" class="muted">观测平均速度</text>
+  <text x="73" y="678" class="value">56.4 GiB</text><text x="285" y="678" class="value">18.3 GiB</text><text x="500" y="678" class="muted">每 5 秒采样 · 分钟汇总 · 保留 30 天</text>
+  <path d="M110 719H1195M110 768H1195M110 817H1195" class="grid"/>
+  <text x="63" y="720" class="muted">20 MiB</text><text x="63" y="769" class="muted">10 MiB</text><text x="91" y="818" class="muted">0</text>
+  <path d="M110 801L170 792L230 808L290 790L350 728L410 786L470 799L530 760L590 794L650 782L710 742L770 779L830 798L890 778L950 711L1010 793L1070 775L1130 801L1195 786" fill="none" stroke="#f6bd68" stroke-width="3"/>
+  <path d="M110 812L170 807L230 815L290 799L350 784L410 800L470 810L530 792L590 806L650 799L710 786L770 800L830 809L890 798L950 777L1010 807L1070 798L1130 812L1195 804" fill="none" stroke="#b299ff" stroke-width="3"/>
+  <text x="110" y="849" class="muted">昨天 22:00</text><text x="620" y="849" class="muted">今天 10:00</text><text x="1110" y="849" class="muted">今天 22:00</text>
+  <text x="73" y="883" class="muted">读取 / 写入 · 空缺表示未采集，设备重启后重新建立基线</text>
+  <text x="48" y="948" class="muted">下方保留 CPU / 内存、负载、计费周期与历史累计；手机端筛选换行，卡片单列展示。</text>
+</svg>
