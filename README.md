@@ -62,12 +62,12 @@ PUBLIC_URL=http://127.0.0.1:8766 npm start
 
 完整的首次部署、域名与证书配置、Nginx 模板、镜像拉取、升级备份及排障步骤见 [部署指南](docs/deployment.md)。以下为快速启动命令。
 
-需要 Docker Engine 和 Compose 插件。在项目根目录执行以下命令，构建镜像、初始化管理员并启动中心：
+需要 Docker Engine 和 Compose 插件。默认使用镜像 `ghcr.io/x-dr/linux-traffic-monitor:latest`，在项目根目录执行以下命令，拉取镜像、初始化管理员并启动中心：
 
 ```bash
-docker compose build
-docker compose run --rm control node apps/api/dist/apps/api/src/admin.js --username admin
-docker compose up -d control
+docker compose pull control
+docker compose run --rm --pull never control node apps/api/dist/apps/api/src/admin.js --username admin
+docker compose up -d --no-build control
 docker compose logs --tail=50 control
 curl --fail http://127.0.0.1:8766/health
 ```
@@ -91,13 +91,13 @@ PUBLIC_URL=https://monitor.example.com
 SECURE_COOKIES=true
 ```
 
-Compose 会读取 `.env`；修改后执行 `docker compose up -d control` 使配置生效。按照 [Nginx 与 HTTPS 部署步骤](docs/deployment.md#4-配置-nginx-与-https)，使用 acme.sh 申请并自动续期证书，依次使用 [HTTP 证书验证模板](deploy/nginx-http.conf) 和 [正式 HTTPS 模板](deploy/nginx.conf)。正式配置包含 SSE 缓冲处理及 Agent 上报大小限制。
+Compose 会读取 `.env`；修改后执行 `docker compose up -d --no-build control` 使配置生效。按照 [Nginx 与 HTTPS 部署步骤](docs/deployment.md#4-配置-nginx-与-https)，使用 acme.sh 申请并自动续期证书，依次使用 [HTTP 证书验证模板](deploy/nginx-http.conf) 和 [正式 HTTPS 模板](deploy/nginx.conf)。正式配置包含 SSE 缓冲处理及 Agent 上报大小限制。
 
 `PUBLIC_URL` 的协议、域名和端口必须与浏览器访问来源一致，否则登录或写操作会返回来源校验错误。
 
 ### 升级与备份
 
-更新源码并备份中心数据后，执行 `docker compose up -d --build control`，再检查日志和 `/health`。升级不需要重新初始化管理员。
+备份中心数据后，执行 `docker compose pull control` 和 `docker compose up -d --no-build control`，再检查日志和 `/health`。升级不需要重新初始化管理员。自行修改源码的构建步骤见 [部署指南](docs/deployment.md#可选从源码构建)。
 
 升级至磁盘历史版本时，应先升级中心，再更新 Agent 至 1.1.0。两端数据库会增量升级至 v2，保留原有网卡流量、节点、配置与登录数据；中心继续接受旧 Agent 上报。磁盘读写历史从新 Agent 开始采集后产生，安装前的数据无法追溯。详细步骤见 [升级磁盘历史功能](docs/operations.md#升级磁盘历史功能)。
 

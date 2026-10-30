@@ -1,7 +1,7 @@
 services:
   control:
     build: .
-    image: linux-traffic-monitor:control
+    image: "${CONTROL_IMAGE:-ghcr.io/x-dr/linux-traffic-monitor:latest}"
     ports:
       - "127.0.0.1:8766:8766"
     environment:

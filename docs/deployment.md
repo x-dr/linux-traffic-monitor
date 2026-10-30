@@ -9,7 +9,7 @@
 - 将域名 A 记录解析到中心 VPS 的公网 IPv4。设置 AAAA 记录时，IPv6 也必须能访问该 VPS。
 - 在云安全组和宿主机防火墙中允许 TCP `80`、`443`，保留自己的 SSH 管理端口。`80` 用于证书验证和 HTTPS 跳转。
 - 安装 Docker Engine 与 Compose 插件，步骤见 Docker 官方 [Ubuntu 安装指南](https://docs.docker.com/engine/install/ubuntu/) 或 [Debian 安装指南](https://docs.docker.com/engine/install/debian/)。
-- 将本仓库源码上传或克隆到固定目录，后续命令均在该目录执行。Docker 构建不要求宿主机安装 Node.js 或 Go。
+- 将本仓库源码上传或克隆到固定目录，后续命令均在该目录执行。默认拉取 `ghcr.io/x-dr/linux-traffic-monitor:latest`，宿主机无需安装 Node.js 或 Go。
 
 检查 Docker，并安装代理与证书工具：
 
@@ -38,6 +38,7 @@ ${EDITOR:-vi} .env
 写入：
 
 ```dotenv
+CONTROL_IMAGE=ghcr.io/x-dr/linux-traffic-monitor:latest
 PUBLIC_URL=https://monitor.example.com
 SECURE_COOKIES=true
 ```
@@ -49,24 +50,27 @@ Compose 默认值与生产配置的关系如下：
 | 配置 | 当前仓库配置 | 部署时的处理 |
 | --- | --- | --- |
 | 服务名 | `control` | 下文所有中心命令均使用此服务名 |
+| `CONTROL_IMAGE` | `ghcr.io/x-dr/linux-traffic-monitor:latest` | Compose 使用的中心镜像，默认直接拉取 |
 | 宿主机端口 | `127.0.0.1:8766` | 由同机 Nginx 访问，保持回环绑定 |
 | 容器监听 | `0.0.0.0:8766` | 由 Compose 配置，无需修改 |
 | 数据库 | 容器内 `/data/control.db` | 持久化于 `control-data` 命名卷 |
 | `PUBLIC_URL` | `http://127.0.0.1:8766` | 在 `.env` 中改为实际 HTTPS 地址 |
 | `SECURE_COOKIES` | `false` | 公网 HTTPS 部署显式设为 `true` |
 
-根目录 `.env` 由 Compose 读取；直接运行 `npm start` 不会自动加载它。修改 `.env` 后使用 `docker compose up -d control` 重建容器配置，单纯 `restart` 不会更新环境变量。
+根目录 `.env` 由 Compose 读取；直接运行 `npm start` 不会自动加载它。修改 `.env` 后使用 `docker compose up -d --no-build control` 重建容器配置，单纯 `restart` 不会更新环境变量。
 
-## 3. 构建并启动中心
+## 3. 拉取镜像并启动中心
+
+使用镜像 `ghcr.io/x-dr/linux-traffic-monitor:latest`，拉取后初始化管理员并启动：
 
 ```bash
 docker compose config --quiet
-docker compose build control
+docker compose pull control
 
 # 仅首次部署执行：交互式隐藏输入密码，长度为 12～256 个字符
-docker compose run --rm control node apps/api/dist/apps/api/src/admin.js --username admin
+docker compose run --rm --pull never control node apps/api/dist/apps/api/src/admin.js --username admin
 
-docker compose up -d control
+docker compose up -d --no-build control
 docker compose ps
 docker compose logs --tail=50 control
 curl --fail --show-error http://127.0.0.1:8766/health
@@ -78,37 +82,25 @@ curl --fail --show-error http://127.0.0.1:8766/health
 
 命名卷实际名称通常带 Compose 项目前缀。后续操作保持同一项目目录及相同的 `-p` / `COMPOSE_PROJECT_NAME`；改变项目名可能连接到新卷，表现为管理员与节点全部为空。
 
-### 可选：使用已发布的 GHCR 镜像
+公开镜像可以匿名拉取；私有镜像需先通过 `docker login ghcr.io` 按提示认证。后续启动使用 `--no-build`，升级先执行 `docker compose pull control`，确保使用仓库中的发布镜像。
 
-如果已经通过仓库 Actions 发布镜像，可以跳过本机构建。将下方 `owner/repo` 和版本替换为实际已发布的小写镜像路径与版本；标签来源见 [README 的构建发布说明](../README.md#github-actions-构建与发布)。
+### 可选：从源码构建
 
-在 `.env` 追加：
+需要运行自行修改的源码时，将 `.env` 中的 `CONTROL_IMAGE` 改为本地镜像名：
 
 ```dotenv
-COMPOSE_FILE=compose.yaml:compose.image.yaml
-CONTROL_IMAGE=ghcr.io/owner/repo:1.2.0
+CONTROL_IMAGE=linux-traffic-monitor:control
 ```
 
-在仓库根目录新建 `compose.image.yaml`：
-
-```yaml
-services:
-  control:
-    image: "${CONTROL_IMAGE:?请在 .env 中设置已发布的镜像地址}"
-```
-
-随后用下面的命令代替上节的构建、初始化和启动：
+然后构建并启动；首次部署仍需在启动前执行前文的管理员初始化命令：
 
 ```bash
-docker compose config --quiet
-docker compose pull control
-# 仅首次执行；沿用前文的交互式密码输入
-docker compose run --rm --pull never control node apps/api/dist/apps/api/src/admin.js --username admin
+docker compose build control
+# 首次部署时，在这里初始化管理员
 docker compose up -d --no-build control
-curl --fail --show-error http://127.0.0.1:8766/health
 ```
 
-公开镜像可以匿名拉取；私有镜像需先通过 `docker login ghcr.io` 按提示认证。`compose.image.yaml` 仅覆盖镜像名，沿用原 Compose 的端口、卷和运行约束。使用此方式时，后续启动和升级使用 `--no-build`，防止本地构建覆盖同名发布镜像。
+源码构建沿用 Compose 的端口、数据卷和运行约束，不需要额外的覆盖文件。镜像发布标签说明见 [README](../README.md#github-actions-构建与发布)。
 
 ## 4. 配置 Nginx 与 HTTPS
 
@@ -230,11 +222,11 @@ umask 077
 backup_dir="$HOME/trafficmon-backups/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$backup_dir"
 docker compose stop control
-docker compose run --rm --no-deps -T control tar -C /data -czf - . > "$backup_dir/control-data.tar.gz"
+docker compose run --rm --no-deps --pull never -T control tar -C /data -czf - . > "$backup_dir/control-data.tar.gz"
 tar -tzf "$backup_dir/control-data.tar.gz" >/dev/null
 docker compose start control
 cp .env compose.yaml "$backup_dir/"
-# 使用发布镜像时，另存 compose.image.yaml；同时保存当前源码版本或镜像标签。
+docker compose images control > "$backup_dir/images.txt"
 ```
 
 确认归档命令和 `tar` 校验均成功后再升级；若备份失败，先恢复中心运行并处理失败原因。此方式在中心停止后复制整个 `/data`，包括仍存在的 SQLite WAL / SHM 文件；不要在运行时只复制 `control.db`。如不能停服务，使用 SQLite 的一致性备份 API。
@@ -243,24 +235,17 @@ cp .env compose.yaml "$backup_dir/"
 
 ### 升级
 
-先完成备份，再更新源码到目标版本，保持项目目录、项目名和数据卷不变。源码构建部署执行：
-
-```bash
-docker compose build control
-docker compose up -d control
-docker compose ps
-docker compose logs --tail=50 control
-curl --fail --show-error https://monitor.example.com/health
-```
-
-发布镜像部署则先在 `.env` 更新 `CONTROL_IMAGE` 为目标版本，然后执行：
+先完成备份，保持项目目录、项目名和数据卷不变。默认镜像使用 `latest`，升级时重新拉取并重建容器：
 
 ```bash
 docker compose pull control
 docker compose up -d --no-build control
 docker compose ps
+docker compose logs --tail=50 control
 curl --fail --show-error https://monitor.example.com/health
 ```
+
+`latest` 会随正式发布变化，回退时使用备份记录中的旧镜像 ID 或提前保存的镜像。源码构建部署则先更新源码，保持 `.env` 中的本地镜像名，执行 `docker compose build control` 后再按上方命令启动并检查，跳过拉取步骤。
 
 升级不重新初始化管理员。需要更新 Agent 时先更新中心，再逐台更新 Agent；磁盘历史版本的兼容与回退要求见 [运行指南](operations.md#升级磁盘历史功能)。
 
@@ -277,7 +262,7 @@ curl --fail --show-error https://monitor.example.com/health
 | Nginx 返回 502 | 检查 `docker compose ps`、中心日志及宿主机 `curl http://127.0.0.1:8766/health`；确认 Nginx 与中心在同一宿主机，或使用了正确的 Docker 网络上游 |
 | `nginx -t` 提示证书不存在 | 先使用 HTTP 模板申请证书，再执行 acme.sh `--install-cert`，核对 `/etc/nginx/ssl/<实际域名>/` 下的安装文件后切换 HTTPS |
 | 证书申请失败或公网超时 | 核对 A / AAAA、80 端口、安全组、防火墙及是否有 CDN 拦截 ACME 路径 |
-| 登录 / 写操作提示来源不匹配 | 核对浏览器实际地址与 `.env` 的 `PUBLIC_URL`，修改后 `docker compose up -d control`；不要去掉 Origin / CSRF 校验 |
+| 登录 / 写操作提示来源不匹配 | 核对浏览器实际地址与 `.env` 的 `PUBLIC_URL`，修改后 `docker compose up -d --no-build control`；不要去掉 Origin / CSRF 校验 |
 | 登录后仍提示未登录 | 检查浏览器 Cookie 与 HTTPS 访问地址；生产配置 `SECURE_COOKIES=true` 时不能通过普通 HTTP 使用会话 |
 | 提示管理员未初始化或原节点不见了 | 检查 Compose 项目名、命名卷和 `/data/control.db` 挂载，确认连接的是原数据卷后再判断是否首次初始化 |
 | 实时数据延迟、SSE 断开 | 检查 Nginx / CDN 的缓冲、压缩、缓存与空闲超时；登录后在 Network 查看 SSE 事件，会话到期后重新登录 |

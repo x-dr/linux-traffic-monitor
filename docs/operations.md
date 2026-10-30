@@ -29,12 +29,12 @@ npm start
 
 首次部署、完整 Nginx 配置、acme.sh 证书申请与续期、GHCR 镜像使用及备份步骤见 [Docker 与 Nginx 部署指南](deployment.md)。
 
-以下命令会构建镜像、创建持久化卷并启动中心服务：
+以下命令会拉取 `ghcr.io/x-dr/linux-traffic-monitor:latest`、初始化管理员、创建持久化卷并启动中心服务：
 
 ```bash
-docker compose build
-docker compose run --rm control node apps/api/dist/apps/api/src/admin.js --username admin
-docker compose up -d control
+docker compose pull control
+docker compose run --rm --pull never control node apps/api/dist/apps/api/src/admin.js --username admin
+docker compose up -d --no-build control
 docker compose logs --tail=50 control
 ```
 
@@ -119,10 +119,10 @@ go test -race ./...
 
 根目录 `npm run test:e2e` 使用临时数据库、测试账号和独立端口启动验收服务。需要先完成前端构建和 amd64 Agent 构建，本机需安装 Chromium/Chrome。`LOAD_SECONDS=60 node --import tsx scripts/load-test.ts` 验证 50 个模拟 Agent 每 5 秒上报，使用临时库并清理，不连接实际 VPS。
 
-可用下列命令对已构建镜像运行隔离的启动检查，数据仅保存在容器内存中，退出后自动清理：
+可用下列命令对已拉取的发布镜像运行隔离的启动检查，数据仅保存在容器内存中，退出后自动清理；自行构建时将镜像地址替换为本地镜像名：
 
 ```bash
-docker run --rm -i --read-only --tmpfs /data:uid=1000,gid=1000,mode=0700 --tmpfs /tmp --network none linux-traffic-monitor:control node --input-type=module < scripts/docker-smoke.mjs
+docker run --rm -i --read-only --tmpfs /data:uid=1000,gid=1000,mode=0700 --tmpfs /tmp --network none ghcr.io/x-dr/linux-traffic-monitor:latest node --input-type=module < scripts/docker-smoke.mjs
 ```
 
 ## 升级磁盘历史功能
