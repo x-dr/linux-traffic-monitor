@@ -3,7 +3,7 @@ import type { DB } from './database.js';
 import { httpError } from './auth.js';
 import { findNode } from './nodes.js';
 export type TelemetryStream = 'diagnostics' | 'workloads';
-export const serverCapabilities = { probes: 1, diagnostics: 1, workloads: 1 } as const;
+export const serverCapabilities = { probes: 1, diagnostics: 1, workloads: 1, reporting: 1 } as const;
 export const defaultDiagnosticSettings = (): DiagnosticSettings => ({ diagnostics: { enabled: false, services: [] }, workloads: { enabled: false, docker: false, processes: [] } });
 export function diagnosticSettings(db: DB, node: string): DiagnosticSettings {
   const row = db.prepare('SELECT config FROM diagnostic_settings WHERE node_id=?').get(node) as { config: string } | undefined;

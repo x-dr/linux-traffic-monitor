@@ -6,6 +6,7 @@ import { CapabilitiesSchema, ExtensionsConfigSchema, ProbeDropsSchema, ProbeResu
 export * from './alerts.js';
 export * from './traffic.js';
 export * from './probes.js';
+export * from './reporting.js';
 
 const NullableNumber = Type.Union([Type.Number({ minimum: 0 }), Type.Null()]);
 export const BytesSchema = Type.String({ pattern: '^(0|[1-9][0-9]{0,18})$' });

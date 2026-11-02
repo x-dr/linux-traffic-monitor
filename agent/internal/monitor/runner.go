@@ -132,21 +132,7 @@ func Run(ctx context.Context, cfg Config, path string, once bool) error {
 	go func() { defer worker.Done(); runner.RunDiagnostics(ctx) }()
 	go func() { defer worker.Done(); runner.RunWorkloads(ctx) }()
 	go func() { defer worker.Done(); runner.RunProbes(ctx) }()
-	go func() {
-		defer worker.Done()
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			if err := runner.Send(ctx); err != nil && ctx.Err() == nil {
-				log.Print(err)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
-	}()
+	go func() { defer worker.Done(); runner.runReports(ctx) }()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	ticks := 0

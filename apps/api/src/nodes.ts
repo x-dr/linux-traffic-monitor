@@ -4,6 +4,7 @@ import { monthBounds } from './periods.js';
 import { defaultConfig, type ByteSummary, type MonitorConfig, type NodeView, type Overview, type Snapshot } from '../../../packages/contracts/src/index.js';
 import { monitoringSummary } from './monitoring-summary.js';
 import { trafficBetween } from './traffic-accounting.js';
+import { reportTiming } from './reporting.js';
 
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 export type NodeRow = {
@@ -48,7 +49,8 @@ export function trafficSummary(db: DB, id: string, cfg: MonitorConfig, now: numb
 export function nodeView(db: DB, row: NodeRow, now = Date.now() / 1000): NodeView {
   const age = row.last_received_at === null ? Infinity : now - row.last_received_at;
   const sampleAge = row.last_sample_received_at === null ? Infinity : now - row.last_sample_received_at;
-  const status = row.archived ? 'archived' : !row.enabled ? 'disabled' : row.last_received_at === null ? 'pending' : age > 45 ? 'offline' : age > 15 || sampleAge > 15 ? 'stale' : 'online';
+  const timing = reportTiming(db, row.id);
+  const status = row.archived ? 'archived' : !row.enabled ? 'disabled' : row.last_received_at === null ? 'pending' : age > timing.offlineSeconds ? 'offline' : age > timing.staleSeconds || sampleAge > timing.staleSeconds ? 'stale' : 'online';
   const config = JSON.parse(row.config) as MonitorConfig;
   return {
     id: row.id, name: row.name, group: row.group_name, tags: JSON.parse(row.tags),

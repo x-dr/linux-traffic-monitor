@@ -25,7 +25,7 @@ test('old Agent remains valid; extensions require explicit capability and return
   const c = await setup(); try {
     const n = await c.create(), report = c.report(), task = saveProbeTask(c.db, input(n.node.id), c.now() - 200);
     let reply = ingest(c.db, `Bearer ${n.token}`, report, c.now());
-    assert.deepEqual(reply.server_capabilities, { probes: 1, diagnostics:1, workloads:1 }); assert.equal(reply.extensions_config, undefined);
+    assert.deepEqual(reply.server_capabilities, { probes: 1, diagnostics:1, workloads:1, reporting:1 }); assert.equal(reply.extensions_config, undefined);
     assert.equal(extensionsView(c.db, n.node.id).supported, false);
     report.probes = []; assert.throws(() => ingest(c.db, `Bearer ${n.token}`, report, c.now()), /协商/);
     report.capabilities = { probes: 1 }; report.applied_extensions_config_version = 0;

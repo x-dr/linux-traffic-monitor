@@ -1,4 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
+import type { ReportInterval } from './reporting.js';
 const strict = { additionalProperties: false };
 const nonnegative = Type.Number({ minimum: 0, maximum: 1e30 });
 const nullable = Type.Union([nonnegative, Type.Null()]);
@@ -32,7 +33,7 @@ export const SyncHealthSchema = Type.Object({ streams: Type.Array(Type.Object({
   drops_tracked: Type.Boolean(), dropped: Type.Integer({ minimum: 0 }), dropped_oldest_at: nullable, dropped_newest_at: nullable,
 }, strict), { maxItems: 7 }), last_ack_at: nullable }, strict);
 export type SyncHealth = Static<typeof SyncHealthSchema>;
-export type DiagnosticSettings = { diagnostics: DiagnosticsConfig; workloads: WorkloadsConfig };
+export type DiagnosticSettings = { diagnostics: DiagnosticsConfig; workloads: WorkloadsConfig; report_interval_seconds?: ReportInterval };
 export type TelemetryView = { supported: boolean; enabled: boolean; config_version: number; applied_version: number; error: string | null;
   settings: DiagnosticSettings; forecasts?:{object:string;full_at:number|null;days:number;reason:string}[]; latest: (TelemetryObject & { fresh: boolean })[]; sync: SyncHealth | null };
 export type TelemetryHistory = { start: number; end: number; step: number; points: { ts: number; object: TelemetryObject }[]; total: number };

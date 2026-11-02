@@ -1,15 +1,32 @@
 import { filesystemForecasts } from './filesystem-forecast.js';
 import type { FastifyInstance } from 'fastify';
 import { Type } from '@sinclair/typebox';
-import { DiagnosticsConfigSchema, WorkloadsConfigSchema, type DiagnosticSettings, type TelemetryMinute, type TelemetryObject } from '../../../packages/contracts/src/index.js';
+import { DiagnosticsConfigSchema, ReportIntervalSchema, WorkloadsConfigSchema, type DiagnosticSettings, type ReportInterval, type TelemetryMinute, type TelemetryObject } from '../../../packages/contracts/src/index.js';
 import type { DB } from './database.js';
 import { findNode } from './nodes.js';
 import { httpError } from './auth.js';
-import { telemetryView, type TelemetryStream } from './telemetry-store.js';
+import { diagnosticSettings, telemetryView, type TelemetryStream } from './telemetry-store.js';
 import { processRollups } from './history-rollups.js';
 import { nodeEvent } from './alert-store.js';
+import { reportingView } from './reporting.js';
 const params=Type.Object({id:Type.String({format:'uuid'})});
 export function installTelemetryRoutes(app:FastifyInstance,db:DB,now:()=>number) {
+  app.get<{Params:{id:string}}>('/api/v1/nodes/:id/reporting', {schema:{params}}, async req => {
+    findNode(db,req.params.id); return reportingView(db,req.params.id);
+  });
+  app.put<{Params:{id:string};Body:{interval_seconds:ReportInterval;expected_version:number}}>('/api/v1/nodes/:id/reporting', {schema:{params,body:Type.Object({
+    interval_seconds:ReportIntervalSchema, expected_version:Type.Integer({minimum:1}),
+  },{additionalProperties:false})}}, async req => {
+    const id=req.params.id; findNode(db,id);
+    db.transaction(() => {
+      if(reportingView(db,id).config_version!==req.body.expected_version)throw httpError(409,'扩展配置已改变，请刷新后重试');
+      const settings={...diagnosticSettings(db,id),report_interval_seconds:req.body.interval_seconds};
+      db.prepare('INSERT INTO diagnostic_settings VALUES(?,?) ON CONFLICT(node_id) DO UPDATE SET config=excluded.config').run(id,JSON.stringify(settings));
+      db.prepare('INSERT INTO agent_extensions(node_id,config_version) VALUES(?,2) ON CONFLICT(node_id) DO UPDATE SET config_version=config_version+1,error=NULL').run(id);
+      nodeEvent(db,id,'report_interval_changed',now(),`Agent 上报间隔已设为 ${req.body.interval_seconds} 秒，等待确认`);
+    })();
+    return reportingView(db,id);
+  });
   for(const stream of ['diagnostics','workloads'] as const) {
     app.get<{Params:{id:string}}>(`/api/v1/nodes/:id/${stream}`,{schema:{params}},async req=>({...telemetryView(db,req.params.id,stream,now()),...(stream==='diagnostics'?{forecasts:filesystemForecasts(db,req.params.id,now())}:{})}));
     app.get<{Params:{id:string};Querystring:{minutes?:number;object?:string;offset?:number;limit?:number}}>(`/api/v1/nodes/:id/${stream}-history`,{schema:{params,querystring:Type.Object({
@@ -17,13 +34,13 @@ export function installTelemetryRoutes(app:FastifyInstance,db:DB,now:()=>number)
     },{additionalProperties:false})}},async req=>telemetryHistory(db,req.params.id,stream,req.query,now()));
   }
   app.put<{Params:{id:string};Body:DiagnosticSettings&{expected_version:number}}>('/api/v1/nodes/:id/diagnostic-settings',{schema:{params,body:Type.Object({
-    diagnostics:DiagnosticsConfigSchema,workloads:WorkloadsConfigSchema,expected_version:Type.Integer({minimum:1}),
+    diagnostics:DiagnosticsConfigSchema,workloads:WorkloadsConfigSchema,report_interval_seconds:Type.Optional(ReportIntervalSchema),expected_version:Type.Integer({minimum:1}),
   },{additionalProperties:false})}},async req=>{
     findNode(db,req.params.id);const {expected_version,...config}=req.body;
     const view=telemetryView(db,req.params.id,'diagnostics',now());
     if(view.config_version!==expected_version)throw httpError(409,'扩展配置已改变，请刷新后重试');
     db.transaction(()=>{
-      db.prepare('INSERT INTO diagnostic_settings VALUES(?,?) ON CONFLICT(node_id) DO UPDATE SET config=excluded.config').run(req.params.id,JSON.stringify(config));
+      db.prepare('INSERT INTO diagnostic_settings VALUES(?,?) ON CONFLICT(node_id) DO UPDATE SET config=excluded.config').run(req.params.id,JSON.stringify({...diagnosticSettings(db,req.params.id),...config}));
       db.prepare('INSERT INTO agent_extensions(node_id,config_version) VALUES(?,2) ON CONFLICT(node_id) DO UPDATE SET config_version=config_version+1,error=NULL').run(req.params.id);
       nodeEvent(db,req.params.id,'diagnostic_config_changed',now(),'诊断与工作负载配置已更新，等待 Agent 确认');
     })();return telemetryView(db,req.params.id,'diagnostics',now());

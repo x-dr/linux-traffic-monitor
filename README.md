@@ -13,11 +13,11 @@
 - **系统诊断**：容量/inode 历史、CPU iowait/steal、PSI、IOPS/等待、TCP 与服务状态，按指标采样时间判定新鲜度；独立补传与同步积压诊断。
 - **运行管理**：白名单进程与受限代理下的 Docker 只读监控、资产到期提醒、短期批量接入、小时/天长期汇总、时区定时报表和 CSV 导出。新采集默认关闭。
 - **流量周期**：按节点设置网卡、IANA 时区及每月起始日和时间，查看当前周期、上一周期与累计下载/上传。
-- **实时与补传**：网络每秒采样，资源采集和上报每 5 秒执行；浏览器通过 SSE 接收状态。断网时本地保存，恢复后分批补传，重复上报不会重复累计。
+- **实时与补传**：网络每秒采样，资源每 5 秒采集；Agent 上报间隔可按节点设为 **1、3、5、10、15 秒**，默认 5 秒，在节点详情的“节点设置 → Agent 上报设置”中保存，Agent 自动确认并持久化。浏览器通过 SSE 接收状态。断网时本地保存，恢复后分批补传，重复上报不会重复累计。
 - **配置下发**：中心按版本下发监控配置，页面显示待应用、已应用或失败；Agent 持久化失败时继续使用原配置。
 - **登录与界面**：单管理员、会话 Cookie、CSRF 校验、登录限流；中文界面、深浅主题及手机和平板布局。
 
-中心超过 15 秒未收到上报，或采样数据超过 15 秒未更新时标为“数据陈旧”；超过 45 秒未收到上报标为“离线”。仅在线节点计入总实时速率。
+中心超过 `max(15 秒, 上报间隔 × 3)` 未收到上报或新采样时标为“数据陈旧”；超过 `max(45 秒, 上报间隔 × 9)` 未收到上报时标为“离线”。旧版 Agent 保持 15 / 45 秒阈值；配置待确认时按最长 15 秒间隔容错。仅在线节点计入总实时速率。
 
 相关文档：[部署指南（Docker + Nginx）](docs/deployment.md) · [运行与迁移指南](docs/operations.md) · [升级设计方案](docs/multi-vps-upgrade-plan.md) · [已有验证记录与边界](docs/verification.md)。
 
@@ -281,6 +281,7 @@ traffic-agent migrate --legacy-db /旧目录/traffic.db --legacy-settings /旧�
 | `GET` / `POST` | `/api/v1/nodes` | 查询节点、创建节点并返回一次性展示的凭据 |
 | `GET` / `PATCH` | `/api/v1/nodes/:id` | 节点详情、资料与状态管理 |
 | `PUT` | `/api/v1/nodes/:id/config` | 下发监控配置 |
+| `GET` / `PUT` | `/api/v1/nodes/:id/reporting` | 查看 / 设置 Agent 上报间隔；写入需 `interval_seconds` 与 `expected_version` |
 | `GET` | `/api/v1/nodes/:id/history?minutes=60` | 历史数据，范围 5～43200 分钟；可选 `interface`、`device` 和 `granularity=auto\|hour\|day`，返回设备选项与区间累计量 |
 | `GET` | `/api/v1/events` | SSE 状态快照，连接后立即发送，随后每 5 秒更新 |
 | `POST` | `/api/v1/agent/report` | Agent 上报，使用该节点的 Bearer token |

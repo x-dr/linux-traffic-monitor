@@ -8,6 +8,7 @@ import { newEvent, nodeEvent, validateChannels } from './alert-store.js';
 import { enqueue } from './notification-queue.js';
 import { billed, trafficBetween } from './traffic-accounting.js';
 import { resourceFresh } from './alert-engine.js';
+import { reportTiming } from './reporting.js';
 
 type PolicyRow = { node_id: string; config: string; version: number; cycle_config: string; recalculated: number };
 export function getPolicy(db: DB, node: string): TrafficPolicy | null {
@@ -30,7 +31,7 @@ function forecast(db: DB, node: NodeRow, policy: TrafficPolicy, now: number, end
   }
   const base = { available: false, days, coverage: days ? minimumCoverage : 0, window_start: start, window_end: stop,
     projected_bytes: null, exhaustion_at: null };
-  if (!resourceFresh(node, now)) return { ...base, reason: '当前采样异常，暂停预测' };
+  if (!resourceFresh(node, now, reportTiming(db, node.id).staleSeconds)) return { ...base, reason: '当前采样异常，暂停预测' };
   const snapshot = JSON.parse(node.snapshot!) as Snapshot;
   if (policy.interfaces.some(name => !snapshot.selected_interfaces.includes(name) || !snapshot.readable_interfaces.includes(name))) return { ...base, reason: '计费网卡当前未被采集或不可读，暂停预测' };
   if (days < 3) return { ...base, reason: '至少需要 3 个计费网卡分钟记录覆盖率均达到 95% 的完整自然日' };

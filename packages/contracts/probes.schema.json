@@ -16,6 +16,10 @@
         "workloads": {
           "const": 1,
           "type": "number"
+        },
+        "reporting": {
+          "const": 1,
+          "type": "number"
         }
       }
     },
@@ -177,6 +181,30 @@
               }
             }
           }
+        },
+        "report_interval_seconds": {
+          "anyOf": [
+            {
+              "const": 1,
+              "type": "number"
+            },
+            {
+              "const": 3,
+              "type": "number"
+            },
+            {
+              "const": 5,
+              "type": "number"
+            },
+            {
+              "const": 10,
+              "type": "number"
+            },
+            {
+              "const": 15,
+              "type": "number"
+            }
+          ]
         }
       }
     },

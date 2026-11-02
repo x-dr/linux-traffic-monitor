@@ -4,22 +4,23 @@ import type { DB } from './database.js';
 import type { NodeRow } from './nodes.js';
 import { closeEvents, eventById, matches, newEvent, nodeEvent } from './alert-store.js';
 import { enqueue, enqueueRecovery } from './notification-queue.js';
+import { reportTiming } from './reporting.js';
 
 type State = { phase: 'normal' | 'pending' | 'firing' | 'recovering'; since: number; event: string | null;
   revision: number; observed: number; evaluated: number; repeat: number; next_repeat: number; identity?: string };
 type Reading = { value: number | null; validity: AlertValidity; observed: number; revision: number; maxGap?: number; identity?: string };
-export function resourceFresh(node: NodeRow, now: number) {
+export function resourceFresh(node: NodeRow, now: number, maxAge = 15) {
   const s = node.snapshot ? JSON.parse(node.snapshot) as Snapshot : null;
-  return !!s && !s.error && node.last_sample_received_at !== null && now - node.last_sample_received_at <= 15
-    && node.last_received_at !== null && now - node.last_received_at <= 15 && now - s.observed_at <= 15 && s.observed_at <= now + 5;
+  return !!s && !s.error && node.last_sample_received_at !== null && now - node.last_sample_received_at <= maxAge
+    && node.last_received_at !== null && now - node.last_received_at <= maxAge && now - s.observed_at <= maxAge && s.observed_at <= now + 5;
 }
 function reading(db: DB, node: NodeRow, rule: AlertRuleInput, now: number): Reading {
   const extended = telemetryReading(db, node.id, rule, now); if (extended) return extended;
   const s = node.snapshot ? JSON.parse(node.snapshot) as Snapshot : null;
   if (rule.metric === 'offline') return { value: now - node.last_received_at!, validity: 'fresh', observed: now, revision: node.snapshot_revision };
   if (rule.metric === 'stale') return { value: now - Math.min(node.last_sample_received_at ?? 0, s?.observed_at ?? 0), validity: 'fresh', observed: now, revision: node.snapshot_revision };
-  const base = { revision: node.snapshot_revision, observed: s?.observed_at ?? 0 };
-  if (!resourceFresh(node, now)) return { ...base, value: null, validity: 'unknown' };
+  const base = { revision: node.snapshot_revision, observed: s?.observed_at ?? 0, maxGap: reportTiming(db, node.id).staleSeconds };
+  if (!resourceFresh(node, now, base.maxGap)) return { ...base, value: null, validity: 'unknown' };
   const disk = s!.disks.find(d => d.mount === rule.object);
   const value = rule.metric === 'cpu' ? s!.cpu_percent : rule.metric === 'memory' ? s!.memory_percent
     : rule.metric === 'disk_percent' ? disk?.used_percent ?? null : rule.metric === 'disk_free' ? (disk ? Number(disk.free_bytes) : null)
@@ -92,7 +93,8 @@ export class AlertEngine {
     state.identity = point.identity; state.revision = point.revision; state.observed = point.observed;
     const value = point.value!;
     const bad = rule.metric === 'disk_free' ? value < rule.threshold : value > rule.threshold;
-    const good = wallClock ? (rule.metric === 'offline' ? now - node.last_received_at! <= Math.min(15, rule.recovery_threshold) : resourceFresh(node, now) && value <= Math.min(15, rule.recovery_threshold))
+    const freshSeconds = reportTiming(this.db, node.id).staleSeconds;
+    const good = wallClock ? (rule.metric === 'offline' ? now - node.last_received_at! <= Math.min(freshSeconds, rule.recovery_threshold) : resourceFresh(node, now, freshSeconds) && value <= Math.min(freshSeconds, rule.recovery_threshold))
       : rule.metric === 'disk_free' ? value > rule.recovery_threshold : value < rule.recovery_threshold;
     const time = wallClock ? now : point.observed;
     if (state.event) {
@@ -105,7 +107,7 @@ export class AlertEngine {
       else if (time - state.since >= rule.duration_seconds) {
         const event = newEvent(this.db, { node_id: node.id, rule_id: id, kind: rule.metric, title: rule.name, severity: rule.severity,
           object: rule.object, state: 'firing', validity: point.validity, first_anomaly_at: state.since, fired_at: now,
-          last_anomaly_at: now, value, threshold: rule.threshold, detail: wallClock ? '通知等待时间独立于列表的 15/45 秒状态阈值' : '仅由新鲜、不同 revision 的有效样本推进' });
+          last_anomaly_at: now, value, threshold: rule.threshold, detail: wallClock ? '通知等待时间独立于列表状态阈值' : '仅由新鲜、不同 revision 的有效样本推进' });
         state.event = event.id; state.phase = 'firing'; state.repeat = 0; state.next_repeat = now + rule.repeat_seconds;
         enqueue(this.db, event, rule.channel_ids, 'trigger', now, 0, this.publicUrl);
       }

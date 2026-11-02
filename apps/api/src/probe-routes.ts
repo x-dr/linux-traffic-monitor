@@ -6,6 +6,7 @@ import { httpError } from './auth.js';
 import { findNode } from './nodes.js';
 import { closeProbeEvents, extensionsView, saveProbeTask, taskById } from './probe-store.js';
 import { probeHistory } from './probe-history.js';
+import { reportTiming } from './reporting.js';
 
 export function installProbeRoutes(app: FastifyInstance, db: DB, now: () => number) {
   const params = Type.Object({ id: Type.String({ format: 'uuid' }) }, { additionalProperties: false });
@@ -17,7 +18,7 @@ export function installProbeRoutes(app: FastifyInstance, db: DB, now: () => numb
       const last = db.prepare('SELECT result FROM probe_results WHERE task_id=? AND node_id=? AND task_version=? ORDER BY scheduled_at DESC LIMIT 1').get(task.id, id, task.version) as { result: string } | undefined;
       const latest: ProbeResult | null = last ? JSON.parse(last.result) : null;
       pairs.push({ task, node_id: id, node_name: node.name, node_active: !!node.enabled && !node.archived,
-        extensions: extensionsView(db, id), latest, fresh: !!latest && latest.completed_at <= now() + 5 && now() - latest.completed_at <= task.interval_seconds * 3 && node.last_received_at !== null && now() - node.last_received_at <= 15 });
+        extensions: extensionsView(db, id), latest, fresh: !!latest && latest.completed_at <= now() + 5 && now() - latest.completed_at <= task.interval_seconds * 3 && node.last_received_at !== null && now() - node.last_received_at <= reportTiming(db, id).staleSeconds });
     }
     return { tasks, pairs };
   });

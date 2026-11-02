@@ -12,6 +12,7 @@ type Capabilities struct {
 	Probes      int `json:"probes,omitempty"`
 	Diagnostics int `json:"diagnostics,omitempty"`
 	Workloads   int `json:"workloads,omitempty"`
+	Reporting   int `json:"reporting,omitempty"`
 }
 type ProbeAssignment struct {
 	ID       string  `json:"id"`
@@ -25,9 +26,10 @@ type ProbeAssignment struct {
 	Timeout  int     `json:"timeout_seconds"`
 }
 type ExtensionsConfig struct {
-	Probes      []ProbeAssignment  `json:"probes"`
-	Diagnostics *DiagnosticsConfig `json:"diagnostics,omitempty"`
-	Workloads   *WorkloadsConfig   `json:"workloads,omitempty"`
+	Probes         []ProbeAssignment  `json:"probes"`
+	Diagnostics    *DiagnosticsConfig `json:"diagnostics,omitempty"`
+	Workloads      *WorkloadsConfig   `json:"workloads,omitempty"`
+	ReportInterval *int               `json:"report_interval_seconds,omitempty"`
 }
 type ProbeDrops struct {
 	Count  int64    `json:"count"`
@@ -53,6 +55,9 @@ var uuidPattern = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0
 var hostPattern = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9])$`)
 
 func (c ExtensionsConfig) Validate() error {
+	if c.ReportInterval != nil && !validReportInterval(*c.ReportInterval) {
+		return errors.New("invalid_config")
+	}
 	if !c.validateTelemetry() || len(c.Probes) > 10 {
 		return errors.New("invalid_config")
 	}

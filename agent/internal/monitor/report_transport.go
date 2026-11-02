@@ -34,9 +34,17 @@ func (r *Runner) Send(ctx context.Context) error {
 	if cfg.AppliedVersion == 0 {
 		report.ImportedConfig = &cfg.Settings
 	}
-	if caps != nil && (caps.Probes == 1 || caps.Diagnostics == 1 || caps.Workloads == 1) {
+	if caps != nil && (caps.Probes == 1 || caps.Diagnostics == 1 || caps.Workloads == 1 || caps.Reporting == 1) {
 		report.Capabilities = &Capabilities{}
-		report.AppliedExtensions = &cfg.AppliedExtensions
+		applied := cfg.AppliedExtensions
+		if caps.Reporting == 1 {
+			report.Capabilities.Reporting = 1
+			if cfg.Extensions.ReportInterval == nil {
+				// An older Agent may have ACKed this version without applying the new field.
+				applied = 0
+			}
+		}
+		report.AppliedExtensions = &applied
 		report.ExtensionsError = extensionError
 		if caps.Diagnostics == 1 {
 			report.Capabilities.Diagnostics = 1
@@ -60,8 +68,6 @@ func (r *Runner) Send(ctx context.Context) error {
 		}
 		if caps.Probes == 1 {
 			report.Capabilities.Probes = 1
-			report.AppliedExtensions = &cfg.AppliedExtensions
-			report.ExtensionsError = extensionError
 			probes, err := r.Store.probeBatch()
 			if err != nil {
 				return errors.New("探测同步读取失败")
@@ -92,7 +98,7 @@ func (r *Runner) Send(ctx context.Context) error {
 		r.mu.Unlock()
 		return err
 	}
-	if reply.ConfigVersion < 1 || reply.ReceivedAt < 0 || (reply.ServerCapabilities != nil && ((reply.ServerCapabilities.Probes != 0 && reply.ServerCapabilities.Probes != 1) || (reply.ServerCapabilities.Diagnostics != 0 && reply.ServerCapabilities.Diagnostics != 1) || (reply.ServerCapabilities.Workloads != 0 && reply.ServerCapabilities.Workloads != 1))) {
+	if reply.ConfigVersion < 1 || reply.ReceivedAt < 0 || (reply.ServerCapabilities != nil && ((reply.ServerCapabilities.Probes != 0 && reply.ServerCapabilities.Probes != 1) || (reply.ServerCapabilities.Diagnostics != 0 && reply.ServerCapabilities.Diagnostics != 1) || (reply.ServerCapabilities.Workloads != 0 && reply.ServerCapabilities.Workloads != 1) || (reply.ServerCapabilities.Reporting != 0 && reply.ServerCapabilities.Reporting != 1))) {
 		return errors.New("中心响应格式无效")
 	}
 	if err = r.Store.Acknowledge(reply.Ack, report); err != nil {
@@ -143,7 +149,8 @@ func (r *Runner) Send(ctx context.Context) error {
 		}
 		r.mu.Unlock()
 	}
-	if reply.ServerCapabilities != nil && (reply.ServerCapabilities.Probes == 1 || reply.ServerCapabilities.Diagnostics == 1 || reply.ServerCapabilities.Workloads == 1) && reply.ExtensionsVersion > cfg.AppliedExtensions {
+	missingInterval := reply.ServerCapabilities != nil && reply.ServerCapabilities.Reporting == 1 && cfg.Extensions.ReportInterval == nil && reply.ExtensionsConfig != nil && reply.ExtensionsConfig.ReportInterval != nil && reply.ExtensionsVersion >= cfg.AppliedExtensions
+	if reply.ServerCapabilities != nil && (reply.ServerCapabilities.Probes == 1 || reply.ServerCapabilities.Diagnostics == 1 || reply.ServerCapabilities.Workloads == 1 || reply.ServerCapabilities.Reporting == 1) && (reply.ExtensionsVersion > cfg.AppliedExtensions || missingInterval) {
 		candidate := cfg
 		message := "invalid_config"
 		if reply.ExtensionsConfig == nil {

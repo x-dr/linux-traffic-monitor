@@ -724,6 +724,10 @@
         "workloads": {
           "const": 1,
           "type": "number"
+        },
+        "reporting": {
+          "const": 1,
+          "type": "number"
         }
       }
     },

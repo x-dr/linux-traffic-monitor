@@ -1,10 +1,11 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { DiagnosticsConfigSchema, WorkloadsConfigSchema } from './diagnostics.js';
+import { ReportIntervalSchema } from './reporting.js';
 
 const id = Type.String({ format: 'uuid' });
 const integer = (minimum: number, maximum = Number.MAX_SAFE_INTEGER) => Type.Integer({ minimum, maximum });
 const nullable = Type.Union([Type.Number({ minimum: 0 }), Type.Null()]);
-export const CapabilitiesSchema = Type.Object({ probes: Type.Optional(Type.Literal(1)), diagnostics: Type.Optional(Type.Literal(1)), workloads: Type.Optional(Type.Literal(1)) }, { additionalProperties: false });
+export const CapabilitiesSchema = Type.Object({ probes: Type.Optional(Type.Literal(1)), diagnostics: Type.Optional(Type.Literal(1)), workloads: Type.Optional(Type.Literal(1)), reporting: Type.Optional(Type.Literal(1)) }, { additionalProperties: false });
 export type Capabilities = Static<typeof CapabilitiesSchema>;
 const execution = {
   kind: Type.Union([Type.Literal('icmp'), Type.Literal('tcp'), Type.Literal('http')]),
@@ -23,7 +24,7 @@ export const ProbeAssignmentSchema = Type.Object({
   id, version: integer(1), start_at: Type.Number({ minimum: 0 }), ...execution,
 }, { additionalProperties: false });
 export type ProbeAssignment = Static<typeof ProbeAssignmentSchema>;
-export const ExtensionsConfigSchema = Type.Object({ probes: Type.Array(ProbeAssignmentSchema, { maxItems: 10 }), diagnostics: Type.Optional(DiagnosticsConfigSchema), workloads: Type.Optional(WorkloadsConfigSchema) }, { additionalProperties: false });
+export const ExtensionsConfigSchema = Type.Object({ probes: Type.Array(ProbeAssignmentSchema, { maxItems: 10 }), diagnostics: Type.Optional(DiagnosticsConfigSchema), workloads: Type.Optional(WorkloadsConfigSchema), report_interval_seconds: Type.Optional(ReportIntervalSchema) }, { additionalProperties: false });
 export type ExtensionsConfig = Static<typeof ExtensionsConfigSchema>;
 export const ProbeResultSchema = Type.Object({
   sample_id: id, task_id: id, task_version: integer(1), revision: integer(1),
