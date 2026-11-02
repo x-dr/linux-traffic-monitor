@@ -8,7 +8,6 @@ trafficmon
 data
 control-data
 agent/bin
-agent
 **/agent.json
 artifacts
 test-results

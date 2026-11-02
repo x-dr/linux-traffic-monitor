@@ -68,6 +68,35 @@ def verify_binary(body, expected):
         raise ValueError('下载内容不是 ELF 程序')
 
 
+def download_bytes(url, limit):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), DownloadRedirect())
+    with opener.open(url, timeout=60) as response:
+        body = response.read(limit + 1)
+    if len(body) > limit:
+        raise ValueError('下载超过大小限制')
+    return body
+
+
+def checksum_for(body, arch):
+    filename = 'traffic-agent-linux-' + arch
+    matches = []
+    for line in body.decode('ascii').splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[1] in (filename, '*' + filename):
+            matches.append(fields[0])
+    if len(matches) != 1 or len(matches[0]) != 64 or not all(c in '0123456789abcdefABCDEF' for c in matches[0]):
+        raise ValueError('中心 SHA256SUMS 缺少唯一有效的对应架构校验值')
+    return matches[0].lower()
+
+
+def download_source(server, arch, url=None, checksum=None):
+    if url and not checksum:
+        raise ValueError('自定义下载地址必须同时提供 --sha256')
+    if checksum and (len(checksum) != 64 or not all(c in '0123456789abcdefABCDEF' for c in checksum)):
+        raise ValueError('需要发布清单中的 SHA256')
+    return https_url(url.replace('{arch}', arch) if url else server + '/downloads/agent/traffic-agent-linux-' + arch)
+
+
 def write_private(path, body):
     path = pathlib.Path(path)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -108,8 +137,8 @@ def main():
     parser.add_argument('--server', required=True)
     parser.add_argument('--registration-id', required=True)
     parser.add_argument('--name', default=platform.node())
-    parser.add_argument('--download-url', required=True, help='最终 HTTPS 下载 URL，{arch} 自动替换')
-    parser.add_argument('--sha256', required=True, help='对应架构发布清单的 SHA256')
+    parser.add_argument('--download-url', help='默认从中心下载；自定义 HTTPS URL 支持 {arch}，须同时提供 --sha256')
+    parser.add_argument('--sha256', help='可固定已核对的 SHA256；省略时读取中心 SHA256SUMS')
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--resume', action='store_true', help='恢复本工具留下的同一安装尝试，不覆盖其他安装')
     args = parser.parse_args()
@@ -118,7 +147,7 @@ def main():
     server = https_url(args.server)
     uuid.UUID(args.registration_id)
     arch, manager = architecture(), init_system()
-    download = https_url(args.download_url.replace('{arch}', arch))
+    download = download_source(server, arch, args.download_url, args.sha256)
     config, data, binary = '/etc/trafficmon/agent.json', '/var/lib/trafficmon-agent', '/usr/local/bin/traffic-agent'
     attempt_path = pathlib.Path('/var/lib/trafficmon-installer/attempt.json')
     if not args.resume:
@@ -128,25 +157,22 @@ def main():
     elif not attempt_path.is_file():
         raise ValueError('没有可恢复的安装尝试')
     print(f'架构 {arch}；服务 {manager}；新安装；默认非 root 运行。')
+    print(f'下载地址：{download}')
     if not args.apply:
         print('预览完成。执行安装时添加 --apply，令牌会通过隐藏终端输入。')
         return
     if os.geteuid() != 0:
         raise ValueError('安装系统服务需要 root；Agent 本身使用 trafficagent 账号')
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), DownloadRedirect())
-    # Release assets may redirect to a CDN; only HTTPS redirects are accepted.
-    with opener.open(download, timeout=60) as response:
-        body = response.read(64 * 1024 * 1024 + 1)
-    if len(body) > 64 * 1024 * 1024:
-        raise ValueError('下载超过 64 MiB')
-    verify_binary(body, args.sha256)
+    expected = args.sha256 or checksum_for(download_bytes(server + '/downloads/agent/SHA256SUMS', 16384), arch)
+    body = download_bytes(download, 64 * 1024 * 1024)
+    verify_binary(body, expected)
     # A stable attempt ID survives failed requests without persisting the registration secret.
     if attempt_path.exists():
         attempt = json.loads(attempt_path.read_text())
-        if attempt['server'] != server or attempt['registration_id'] != args.registration_id or attempt.get('sha256') != args.sha256.lower():
+        if attempt['server'] != server or attempt['registration_id'] != args.registration_id or attempt.get('sha256') != expected.lower():
             raise ValueError('存在其他注册尝试，请先人工核对')
     else:
-        attempt = dict(server=server, registration_id=args.registration_id, request_id=str(uuid.uuid4()), sha256=args.sha256.lower())
+        attempt = dict(server=server, registration_id=args.registration_id, request_id=str(uuid.uuid4()), sha256=expected.lower())
         write_private(attempt_path, json.dumps(attempt))
     if pathlib.Path(config).exists():
         if not args.resume or pathlib.Path(config).is_symlink():
@@ -178,7 +204,7 @@ def main():
     if pathlib.Path(binary).exists():
         if not args.resume or pathlib.Path(binary).is_symlink():
             raise ValueError('拒绝覆盖现有二进制')
-        verify_binary(pathlib.Path(binary).read_bytes(), args.sha256)
+        verify_binary(pathlib.Path(binary).read_bytes(), expected)
     else:
         fd = os.open(binary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o755)
         with os.fdopen(fd, 'wb') as target:

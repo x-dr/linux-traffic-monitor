@@ -45,17 +45,18 @@ Docker 默认关闭，需要在 Agent **本地** 0600 配置中加入 `docker_pr
 
 “运行管理”创建注册凭据：有效 5 分钟～24 小时、最多 1～50 台、可撤销。只保存摘要，令牌仅创建时显示一次。通过 Authorization 头提交注册；不把令牌放入 URL 或命令行。相同注册 ID + request ID 在凭据有效且未撤销时重试返回同一节点和凭据，不重复消耗次数。
 
-检查项目中的 `scripts/install-agent.py` 后，在目标 Linux 使用对应发布资产的 SHA256。下面均为占位示例，实际版本及下载地址由管理员填写：
+从中心下载并检查 `install-agent.py`，或使用项目中的 `scripts/install-agent.py`。默认按目标架构从同一中心下载 Agent 与 SHA256SUMS，不需要访问 GitHub；下面为占位示例，替换中心地址和注册 ID：
 
 ```bash
+curl --fail --show-error --proto '=https' https://monitor.example.com/downloads/agent/install-agent.py -o install-agent.py
 python3 install-agent.py \
   --server https://monitor.example.com \
-  --registration-id 11111111-1111-4111-8111-111111111111 \
-  --download-url 'https://github.com/x-dr/linux-traffic-monitor/releases/download/vX.Y.Z/traffic-agent-linux-{arch}' \
-  --sha256 <对应架构的SHA256>
+  --registration-id 11111111-1111-4111-8111-111111111111
 ```
 
 默认只预览。正式安装增加 `--apply`，令牌通过 getpass 隐藏输入。工具识别 amd64/arm64 与 systemd/OpenRC、先校验下载，再注册，创建非 root `trafficagent` 账号和固定服务单元。已有配置、数据、二进制或服务单元时拒绝覆盖，现有节点升级仍使用原运维流程。
+
+可添加 `--sha256 <对应架构的SHA256>` 固定已核对的校验值。使用其他发布源时，继续支持 `--download-url 'https://github.com/x-dr/linux-traffic-monitor/releases/download/vX.Y.Z/traffic-agent-linux-{arch}' --sha256 <对应架构的SHA256>`；自定义地址不能省略校验值。下载不发送注册凭据，仅允许 HTTPS；清单与程序来自同一中心时，SHA256 用于传输完整性校验，仍需信任中心。预览不会联网，也不会创建文件或请求注册。
 
 本工具保留不含令牌的注册尝试信息在 `/var/lib/trafficmon-installer/attempt.json`；同一次安装中断可加 `--resume --apply` 重试。仅接续同中心、注册 ID、校验值的安装，并校验已有二进制、配置和固定单元，不替换其他安装。若注册凭据已经失效且尚未保存节点配置，需管理员核对中心已注册节点后处理，不能自动抹掉节点或重建已有数据目录。
 

@@ -1,6 +1,7 @@
 // Run inside the built image, with /data and /tmp mounted as disposable tmpfs.
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
 
@@ -23,6 +24,36 @@ try {
   const index = await fetch(origin + '/'); assert.equal(index.status, 200);
   const html = await index.text(); assert.match(html, /VPS Observatory/);
   const asset = html.match(/src="([^"]+\.js)"/)[1]; assert.equal((await fetch(origin + asset)).status, 200);
+  const checksumsResponse = await fetch(origin + '/downloads/agent/SHA256SUMS');
+  assert.equal(checksumsResponse.status, 200);
+  const checksums = await checksumsResponse.text();
+  if (process.env.EXPECTED_AGENT_SHA256SUMS) {
+    assert.equal(checksums, await readFile(process.env.EXPECTED_AGENT_SHA256SUMS, 'utf8'), 'image Agent files differ from Release assets');
+  }
+  for (const [arch, machine] of [['amd64', 62], ['arm64', 183]]) {
+    const filename = `traffic-agent-linux-${arch}`;
+    const url = origin + '/downloads/agent/' + filename;
+    const response = await fetch(url); assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'application/octet-stream');
+    assert.equal(response.headers.get('cache-control'), 'no-cache');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.readUInt32BE(0), 0x7f454c46);
+    assert.equal(bytes[4], 2); assert.equal(bytes[5], 1); // ELF64, little endian.
+    assert.equal(bytes.readUInt16LE(18), machine);
+    assert.ok(checksums.split('\n').includes(`${createHash('sha256').update(bytes).digest('hex')}  ${filename}`));
+    const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.status, 200);
+    assert.equal(head.headers.get('content-length'), String(bytes.length));
+    assert.equal((await head.arrayBuffer()).byteLength, 0);
+  }
+  const installer = await fetch(origin + '/downloads/agent/install-agent.py'); assert.equal(installer.status, 200);
+  assert.equal(await installer.text(), await readFile(process.env.AGENT_DIST_ROOT + '/install-agent.py', 'utf8'));
+  assert.equal((await fetch(origin + '/downloads/agent/agent.json')).status, 404);
+  assert.equal((await fetch(origin + '/downloads/agent/nested/missing')).status, 404);
+  const arch = { x64: 'amd64', arm64: 'arm64' }[process.arch];
+  const agentVersion = spawnSync(`${process.env.AGENT_DIST_ROOT}/traffic-agent-linux-${arch}`, ['version'], { encoding: 'utf8' });
+  assert.equal(agentVersion.status, 0, 'packaged Agent cannot run');
+  assert.match(agentVersion.stdout.trim(), /^\d+\.\d+\.\d+/);
+  if (process.env.EXPECTED_AGENT_VERSION) assert.equal(agentVersion.stdout.trim(), process.env.EXPECTED_AGENT_VERSION);
   assert.equal((await fetch(origin + '/nodes/11111111-1111-4111-8111-111111111111')).status, 200);
   assert.equal((await fetch(origin + '/api/v1/nodes')).status, 401);
   const login = await fetch(origin + '/api/v1/auth/login', {
@@ -72,7 +103,7 @@ try {
   await reader.cancel(); controller.abort();
   assert.equal((await fetch(origin + '/api/v1/auth/logout', { method: 'POST', headers })).status, 200);
   assert.equal((await fetch(origin + '/api/v1/nodes', { headers })).status, 401);
-  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite v6, static assets, auth, SSE, disabled rule/probe/diagnostics/report, short registration, key-free monitoring, quota preview/save and logout.');
+  console.log('Docker smoke passed: non-root + read-only root, both Agent architectures/ELF/SHA256/HEAD, native Agent version, installer, compiled admin/entrypoint, SQLite v6, static assets, auth, SSE, disabled rule/probe/diagnostics/report, short registration, key-free monitoring, quota preview/save and logout.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([new Promise(resolve => child.once('exit', resolve)), setTimeout(3000).then(() => child.kill('SIGKILL'))]);

@@ -2,6 +2,15 @@
 
 最后更新：2026-11-02；历史记录按各节日期保留。全部操作针对本地工作区或隔离的临时数据库；没有对现有 `trafficmon/traffic.db`、`trafficmon/settings.json` 执行迁移或写入，没有部署实际 VPS。
 
+## Agent 镜像打包与中心分发（2026-11-02）
+
+- 定向下载回归 **2 项通过**；完整 `npm test` **82 项通过**。首次受沙箱监听和 Python 子进程限制影响的 4 项旧测试，在允许临时本机服务的环境重跑后均通过。
+- Python 工具 **12 项通过**；中心默认下载、自定义源校验约束、清单解析、有界读取、校验失败时不注册/写文件及原安装保护均覆盖。类型检查、生产构建、actionlint 和差异空白检查通过。
+- 完整 Dockerfile 构建了本地镜像 `linux-traffic-monitor:agent-distribution`（版本参数 `1.3.0`），通过非 root、只读根目录、无外部网络、内存数据目录的 smoke：双架构 ELF/机器标识/SHA256/匿名 GET/HEAD、安装脚本、原生 Agent 版本、SQLite v6、登录/CSRF/SSE 及原监控管理流程。独立源码目录按 Release 参数重新编译，两种 Agent 与镜像内 SHA256 均一致。
+- 省略 `AGENT_VERSION` 的默认构建通过，测试镜像内原生程序输出源码默认版本 `1.3.0`。
+- Chrome 使用临时内存数据库，真实点击下载、比较 SHA256 与脚本内容，验证注册命令和 1440/390/320px 布局；无页面错误。详情及截图见 [分发验收](agent-distribution.md#本地验收)。
+- 未发布/部署、未写目标 VPS 配置/数据、未安装实际服务；arm64 仅编译并检查文件，未做设备运行，本轮未重跑 Go 单元/竞态测试。
+
 ## 旧库探测状态导致上报 HTTP 500（2026-11-02）
 
 - 中心实际错误：`table probe_states has 7 columns but 8 values were supplied`。只读检查工作区 `data/control.db` 确认为 v5 / 7 列，缺少 `first_failure_at`；新建数据库已有该字段，因此此前的新库用例没有覆盖旧表问题。

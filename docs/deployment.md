@@ -209,6 +209,8 @@ sudo -H /root/.acme.sh/acme.sh --cron --home /root/.acme.sh
 3. 在该 VPS 安装对应架构的 Go Agent 和 [systemd 服务](../deploy/trafficmon-agent.service)，完整下载、校验、安装命令见 [README 的 Agent 接入步骤](../README.md#接入-go-agent)。
 4. 在启动常驻服务前以 `trafficagent` 用户执行一次上报，再启用 systemd 服务；后台核对节点在线状态、主机名和资源指标。
 
+中心镜像同时包含 Linux amd64 / arm64 Agent，可直接从 `/downloads/agent/traffic-agent-linux-amd64` 或 `/downloads/agent/traffic-agent-linux-arm64` 下载；校验文件为 `/downloads/agent/SHA256SUMS`。以上地址通过现有 Nginx 根路径代理提供，不需要新增端口或卷。完整下载命令见 [从中心下载](../README.md#从中心下载推荐)。批量注册可使用中心提供的 `/downloads/agent/install-agent.py`，默认自动选择架构并校验；注册凭据在“运行管理”创建。
+
 每台被监控 VPS（包括需要监控的中心宿主机）都要单独安装 Agent。仅运行中心容器不会采集宿主机指标。Agent 主动通过 HTTPS 上报，无需开放入站端口。
 
 Alpine Linux VPS 请使用 [OpenRC Agent 安装步骤](operations.md#alpine-linuxopenrc) 和 [OpenRC 服务文件](../deploy/trafficmon-agent.openrc)，其中包含 Alpine 的依赖、系统用户、单次上报及开机启动命令。
@@ -258,7 +260,7 @@ docker compose logs --tail=50 control
 curl --fail --show-error https://monitor.example.com/health
 ```
 
-`latest` 会随正式发布变化，回退时使用备份记录中的旧镜像 ID 或提前保存的镜像。源码构建部署则先更新源码，保持 `.env` 中的本地镜像名，执行 `docker build -t linux-traffic-monitor:control .`（标签与 `CONTROL_IMAGE` 一致）后再按上方命令启动并检查，跳过拉取步骤。
+`latest` 会随正式发布变化，回退时使用备份记录中的旧镜像 ID 或提前保存的镜像。源码构建部署则先更新源码，保持 `.env` 中的本地镜像名，执行 `docker build -t linux-traffic-monitor:control .`（标签与 `CONTROL_IMAGE` 一致）后再按上方命令启动并检查，跳过拉取步骤。Docker 构建阶段会交叉编译两种 Agent，不要求宿主机安装 Go；可添加 `--build-arg AGENT_VERSION=1.3.0` 注入版本，省略时使用源码默认版本。手动发布工作流自动将输入版本同时用于镜像内及 Release 的 Agent，并检查 SHA256 一致。
 
 升级不重新初始化管理员。需要更新 Agent 时先更新中心，再逐台更新 Agent；磁盘历史版本的兼容与回退要求见 [运行指南](operations.md#升级磁盘历史功能)。
 

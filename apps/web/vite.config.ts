@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  server: { proxy: { '/api': { target: process.env.API_URL || 'http://127.0.0.1:8766', changeOrigin: false } } },
+  server: { proxy: Object.fromEntries(['/api', '/downloads'].map(prefix => [prefix, {
+    target: process.env.API_URL || 'http://127.0.0.1:8766', changeOrigin: false,
+  }])) },
   build: {
     rollupOptions: { output: { manualChunks(id) {
       if (!id.includes('/node_modules/')) return;

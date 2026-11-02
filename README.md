@@ -110,6 +110,32 @@ Compose 会读取 `.env`；修改后执行 `docker compose up -d --no-build cont
 
 ## 接入 Go Agent
 
+### 从中心下载（推荐）
+
+中心 Docker 镜像内置 **amd64 和 arm64 两种静态 Agent**、校验清单和安装脚本，VPS 可直接从自己的中心下载，无需访问 GitHub。后台“接入 VPS”提供二进制与校验清单链接，“运行管理 → 批量接入”提供安装脚本。
+
+下面以 amd64 为例，arm64 将文件名改为 `traffic-agent-linux-arm64`；中心地址须改为自己的最终 HTTPS 地址：
+
+```bash
+center_url=https://monitor.example.com
+curl --fail --show-error --proto '=https' "$center_url/downloads/agent/traffic-agent-linux-amd64" -o traffic-agent-linux-amd64
+curl --fail --show-error --proto '=https' "$center_url/downloads/agent/SHA256SUMS" -o SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+chmod +x traffic-agent-linux-amd64
+./traffic-agent-linux-amd64 version
+```
+
+下载后按下方“创建节点与安装”接入。若使用短期批量注册凭据，可下载并检查安装脚本，填写中心地址和注册 ID 后先预览：
+
+```bash
+curl --fail --show-error --proto '=https' https://monitor.example.com/downloads/agent/install-agent.py -o install-agent.py
+python3 install-agent.py --server https://monitor.example.com --registration-id 11111111-1111-4111-8111-111111111111
+```
+
+确认后以 root 添加 `--apply` 安装；注册令牌通过隐藏输入提供。脚本识别架构、从中心读取 SHA256SUMS 并校验程序，已有安装会停止。可用 `--sha256` 固定已核对的校验值；使用 `--download-url` 自定义源时必须同时指定 `--sha256`。清单与程序来自同一中心，须信任中心 HTTPS。详见 [批量接入](docs/monitoring-m2b-m3-operations.md#批量接入)。
+
+固定下载地址随中心镜像升级，已有 Agent 不会自动替换。接口不要求登录，只提供公开安装文件；未打包文件时返回 503，其他文件返回 404。源码运行的分发目录默认为 `artifacts/agent`，可通过 `AGENT_DIST_ROOT` 修改。
+
 ### 下载发布版本
 
 GitHub 仓库的 **Releases** 页面提供以下附件，无需在 VPS 上安装 Go：
@@ -269,7 +295,7 @@ traffic-agent migrate --legacy-db /旧目录/traffic.db --legacy-settings /旧�
 
 工作流见 [.github/workflows/build.yml](.github/workflows/build.yml)，使用仓库内置 `GITHUB_TOKEN`，无需另配镜像仓库密码或 PAT。
 
-工作流仅支持手动触发；推送分支、推送标签以及创建或更新 PR 均不会自动运行。手动运行时会构建 amd64 / arm64 中心镜像并推送到 GHCR，创建对应版本的 Release 并上传两个 Agent 二进制文件和 `SHA256SUMS`；同时保存 Actions artifact 14 天。
+工作流仅支持手动触发；推送分支、推送标签以及创建或更新 PR 均不会自动运行。手动运行时会构建 amd64 / arm64 中心镜像并推送到 GHCR，每种中心镜像内都打包两个架构的 Agent；创建对应版本的 Release 并上传两个 Agent 二进制文件和 `SHA256SUMS`；同时保存 Actions artifact 14 天。
 
 手动发布：进入 **Actions → Build images and agent → Run workflow**，选择要构建的分支或标签，在 `version` 中填写 `1.2.0` 或 `v1.2.0` 后运行。也支持 `1.2.0-rc.1` 等预发布版本；版本格式会在构建前校验，不支持 `+build` 构建元数据。
 
@@ -277,7 +303,7 @@ traffic-agent migrate --legacy-db /旧目录/traffic.db --legacy-settings /旧�
 
 镜像名称中的 owner 和 repo 自动转为小写，镜像支持 `linux/amd64` 和 `linux/arm64`。`1.2.0-rc.1` 等预发布版本会创建预发布 Release，并且不更新 `latest`；选择 `main` 分支手动运行时还会生成 `:main` 镜像标签，每次运行也会生成 `sha-<短提交号>` 标签，正式部署可固定使用版本标签。
 
-发布前会运行中心类型检查、测试和构建，以及 Agent 的 `go vet`、竞态测试和双架构静态编译。中心 amd64 镜像还会使用临时内存数据目录验证非 root、只读根文件系统下的实际启动、SQLite、静态页面、登录和 SSE；arm64 镜像完成构建，不代表已做设备运行验证。任一检查失败时不发布 Release。重新运行相同标签的工作流会更新该 Release 的同名附件。
+发布前会运行中心类型检查、测试和构建、Python 工具测试，以及 Agent 的 `go vet`、竞态测试和双架构静态编译。中心 amd64 镜像还会使用临时内存数据目录验证非 root、只读根文件系统下的实际启动、SQLite、静态页面、登录、SSE 与匿名 Agent 下载，并核对镜像内双架构程序的 SHA256 与 Release 产物一致、原生程序版本与手动输入一致；arm64 镜像完成构建，不代表已做设备运行验证。任一检查失败时不发布 Release。重新运行相同标签的工作流会更新该 Release 的同名附件。
 
 首次发布后检查仓库的 **Packages** 页面：GHCR 包默认可能是私有的；如需匿名拉取，需将包的可见性设为 Public。若仓库或组织限制了 Actions 的包写入权限，需要在对应设置中允许该工作流发布包。
 

@@ -25,10 +25,11 @@ import { loadNotificationKey, type WebhookPolicy, type WebhookSender } from './w
 import { closeEvents, nodeEvent } from './alert-store.js';
 import { updatePolicyCycle } from './traffic-policy.js';
 import { installProbeRoutes } from './probe-routes.js';
+import { installAgentDownloads } from './agent-downloads.js';
 
 export type AppOptions = {
   db?: DB; dbPath?: string; publicUrl?: string; secureCookies?: boolean; now?: () => number;
-  webRoot?: string; logger?: boolean; eventsInterval?: number;
+  webRoot?: string; agentDistRoot?: string; logger?: boolean; eventsInterval?: number;
   notificationKeyFile?: string; notificationKey?: Buffer; webhookPolicy?: WebhookPolicy; webhookSender?: WebhookSender; background?: boolean;
 };
 export async function buildApp(options: AppOptions = {}) {
@@ -64,6 +65,7 @@ export async function buildApp(options: AppOptions = {}) {
   app.addHook('preClose', async () => { clearInterval(interval); clearInterval(cleanup); hub.close(); await tasks.close(); });
   app.addHook('onClose', async () => { if (!options.db) db.close(); });
   app.get('/health', async () => ({ ok: true }));
+  installAgentDownloads(app, options.agentDistRoot || './artifacts/agent');
   installAlertRoutes(app, db, now);
   installNotificationRoutes(app, db, now, key, policy);
   installTrafficRoutes(app, db, now, options.publicUrl);
@@ -120,7 +122,7 @@ export async function buildApp(options: AppOptions = {}) {
   if (existsSync(resolve(root, 'index.html'))) {
     await app.register(staticFiles, { root, prefix: '/' });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/assets/')) return reply.sendFile('index.html', { cacheControl: false });
+      if (req.method === 'GET' && !['/api/', '/assets/', '/downloads/'].some(prefix => req.url.startsWith(prefix))) return reply.sendFile('index.html', { cacheControl: false });
       return reply.code(404).send({ error: '接口或资源不存在' });
     });
   }
