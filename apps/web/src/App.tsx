@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { App as AntApp, Button, Drawer, Layout, Menu, Tooltip } from 'antd';
-import { DashboardOutlined, CloudServerOutlined, PlusCircleOutlined, SettingOutlined, RadarChartOutlined, LogoutOutlined, MenuOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons';
+import { BellOutlined, DashboardOutlined, CloudServerOutlined, PlusCircleOutlined, SettingOutlined, RadarChartOutlined, LogoutOutlined, MenuOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api';
@@ -11,12 +11,16 @@ import NodesPage from './Nodes';
 import NodeDetail from './NodeDetail';
 import ConnectPage from './Connect';
 import SettingsPage from './Settings';
+import AlertsPage from './Alerts';
+import ProbesPage from './Probes';
 import { LoadingState } from './components';
 import WorkspaceBreadcrumb from './WorkspaceBreadcrumb';
 
 const items = [
   { key: '/overview', icon: <DashboardOutlined />, label: '全局概览' },
   { key: '/nodes', icon: <CloudServerOutlined />, label: 'VPS 管理' },
+  { key: '/alerts', icon: <BellOutlined />, label: '告警中心' },
+  { key: '/probes', icon: <RadarChartOutlined />, label: '网络探测' },
   { key: '/connect', icon: <PlusCircleOutlined />, label: '接入服务器' },
   { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
 ];
@@ -65,6 +69,8 @@ export default function Application({ dark, toggleTheme }: { dark: boolean; togg
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/nodes" element={<NodesPage />} />
           <Route path="/nodes/:id" element={<NodeDetail />} />
+          <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/probes" element={<ProbesPage />} />
           <Route path="/connect" element={<ConnectPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/overview" replace />} />

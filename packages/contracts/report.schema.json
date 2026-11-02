@@ -708,6 +708,210 @@
           "type": "string"
         }
       }
+    },
+    "capabilities": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "probes": {
+          "const": 1,
+          "type": "number"
+        }
+      }
+    },
+    "probes": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sample_id",
+          "task_id",
+          "task_version",
+          "revision",
+          "scheduled_at",
+          "started_at",
+          "completed_at",
+          "status",
+          "attempts",
+          "latency_ms",
+          "http_status",
+          "certificate_expires_at"
+        ],
+        "properties": {
+          "sample_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "task_version": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "revision": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "scheduled_at": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "started_at": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "completed_at": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "success",
+                "type": "string"
+              },
+              {
+                "const": "dns",
+                "type": "string"
+              },
+              {
+                "const": "tcp",
+                "type": "string"
+              },
+              {
+                "const": "tls",
+                "type": "string"
+              },
+              {
+                "const": "http",
+                "type": "string"
+              },
+              {
+                "const": "timeout",
+                "type": "string"
+              },
+              {
+                "const": "icmp",
+                "type": "string"
+              },
+              {
+                "const": "unsupported",
+                "type": "string"
+              },
+              {
+                "const": "blocked",
+                "type": "string"
+              },
+              {
+                "const": "skipped",
+                "type": "string"
+              }
+            ]
+          },
+          "attempts": {
+            "minimum": 0,
+            "maximum": 1,
+            "type": "integer"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "minimum": 100,
+                "maximum": 599,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "certificate_expires_at": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "applied_extensions_config_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "extensions_config_error": {
+      "anyOf": [
+        {
+          "const": "invalid_config",
+          "type": "string"
+        },
+        {
+          "const": "persist_failed",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "probe_drops": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "count",
+        "oldest_at",
+        "newest_at"
+      ],
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "oldest_at": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "newest_at": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     }
   }
 }

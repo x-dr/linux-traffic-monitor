@@ -33,7 +33,25 @@ try {
   const headers = { Cookie: cookie, Origin: origin, 'X-CSRF-Token': session.csrf };
   const created = await fetch(origin + '/api/v1/nodes', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Docker smoke test' }) });
   assert.equal(created.status, 201);
+  const node = (await created.json()).node;
+  const channels = await fetch(origin + '/api/v1/notification-channels', { headers });
+  assert.equal(channels.status, 200); assert.equal((await channels.json()).configured, false);
+  const rule = { name: 'Docker disabled rule', enabled: false, scope: { kind: 'all', node_ids: [], value: '' },
+    metric: 'cpu', object: '', threshold: 90, duration_seconds: 300, recovery_threshold: 80, recovery_seconds: 120,
+    severity: 'warning', channel_ids: [], repeat_seconds: 0 };
+  const ruleResult = await fetch(origin + '/api/v1/alert-rules', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(rule) });
+  assert.equal(ruleResult.status, 201);
+  const policy = { enabled: false, quota_bytes: '1000000000', input_unit: 'GB', direction: 'max', interfaces: ['ens3'], thresholds: [80, 90, 100], channel_ids: [] };
+  const preview = await fetch(origin + `/api/v1/nodes/${node.id}/traffic-policy/preview`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(policy) });
+  assert.equal(preview.status, 200);
+  const saved = await fetch(origin + `/api/v1/nodes/${node.id}/traffic-policy`, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json', 'If-Match': '0', 'X-Config-Version': '1' }, body: JSON.stringify(policy) });
+  assert.equal(saved.status, 200);
   const listing = await fetch(origin + '/api/v1/nodes', { headers }); assert.equal((await listing.json()).nodes.length, 1);
+  const probeTask = { name: 'Docker disabled probe', kind: 'http', target: 'https://example.com/health', port: 0, family: 'ipv4', interval_seconds: 60,
+    timeout_seconds: 3, node_ids: [node.id], enabled: false, channel_ids: [] };
+  const probeSaved = await fetch(origin + '/api/v1/probe-tasks', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(probeTask) });
+  assert.equal(probeSaved.status, 201);
+  assert.equal((await (await fetch(origin + '/api/v1/probe-tasks', { headers })).json()).pairs.length, 1);
   const controller = new AbortController();
   const events = await fetch(origin + '/api/v1/events', { headers, signal: controller.signal });
   assert.equal(events.headers.get('content-type'), 'text/event-stream; charset=utf-8');
@@ -42,7 +60,7 @@ try {
   await reader.cancel(); controller.abort();
   assert.equal((await fetch(origin + '/api/v1/auth/logout', { method: 'POST', headers })).status, 200);
   assert.equal((await fetch(origin + '/api/v1/nodes', { headers })).status, 401);
-  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite, static assets, deep links, auth, SSE and logout.');
+  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite v4, static assets, auth, SSE, disabled rule/probe, key-free monitoring, quota preview/save and logout.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([new Promise(resolve => child.once('exit', resolve)), setTimeout(3000).then(() => child.kill('SIGKILL'))]);

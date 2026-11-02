@@ -36,7 +36,7 @@ func OpenStore(path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	var version int
-	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version > 2 {
+	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version > 3 {
 		db.Close()
 		return nil, errors.New("Agent 数据库版本不可用，请使用对应版本程序")
 	}
@@ -58,9 +58,17 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if err = migrateDiskStore(db); err != nil {
-		db.Close()
-		return nil, err
+	if version < 2 {
+		if err = migrateDiskStore(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
+	if version < 3 {
+		if err = migrateProbeStore(db); err != nil {
+			db.Close()
+			return nil, err
+		}
 	}
 	s := &Store{DB: db}
 	err = db.QueryRow("SELECT v FROM meta WHERE k='source_id'").Scan(&s.SourceID)
@@ -251,7 +259,7 @@ func (s *Store) Acknowledge(ack Ack, report Report) error {
 	for _, row := range report.DiskIO {
 		maximum.DiskIO = max(maximum.DiskIO, row.Revision)
 	}
-	if ack != maximum {
+	if ack.Traffic != maximum.Traffic || ack.Resources != maximum.Resources || ack.Totals != maximum.Totals || ack.DiskIO != maximum.DiskIO {
 		return errors.New("中心确认与发送批次不一致，保留待同步记录")
 	}
 	tx, err := s.DB.Begin()
@@ -263,6 +271,20 @@ func (s *Store) Acknowledge(ack Ack, report Report) error {
 		if _, err = tx.Exec("UPDATE sync_state SET cursor=MAX(cursor,?) WHERE name=?", cursor, name); err != nil {
 			return err
 		}
+	}
+	if report.Probes != nil && ack.Probes != nil {
+		var maximum int64
+		for _, row := range *report.Probes {
+			maximum = max(maximum, row.Revision)
+		}
+		if *ack.Probes != maximum {
+			return errors.New("探测确认与发送批次不一致")
+		}
+		if _, err = tx.Exec("UPDATE sync_state SET cursor=MAX(cursor,?) WHERE name='probes'", maximum); err != nil {
+			return err
+		}
+	} else if report.Probes == nil && ack.Probes != nil && *ack.Probes != 0 {
+		return errors.New("中心确认了未发送的探测批次")
 	}
 	return tx.Commit()
 }

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
+import { migrateDatabase } from '../src/migrations.js';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { Value } from '@sinclair/typebox/value';
 import { ReportSchema } from '../../../packages/contracts/src/index.js';
@@ -129,14 +131,15 @@ test('disk retention rejects expired backfill and pruning preserves all network 
 test('v1 database upgrades add disk tables and preserve nodes, sessions and old traffic', () => {
   const root = mkdtempSync(join(tmpdir(), 'traffic-v1-upgrade-'));
   try {
-    const path = join(root, 'control.db'), old = openDatabase(path);
+    const path = join(root, 'control.db'), old = new Database(path);
+    migrateDatabase(old, 2);
     const node = createNode(old, { name: 'existing node' }, fixture.snapshot.observed_at);
     ingest(old, `Bearer ${node.token}`, structuredClone(fixture), fixture.snapshot.observed_at);
     old.prepare('INSERT INTO sessions VALUES(?,?,?)').run('test-session-hash', 'test-csrf', 9999999999);
     old.exec('DROP TABLE disk_minutes; PRAGMA user_version=1;'); old.close();
     const upgraded = openDatabase(path);
     try {
-      assert.equal(upgraded.pragma('user_version', { simple: true }), 2);
+      assert.equal(upgraded.pragma('user_version', { simple: true }), 4);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM sessions').get() as { n: number }).n, 1);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM nodes').get() as { n: number }).n, 1);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM traffic_minutes').get() as { n: number }).n, 1);

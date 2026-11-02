@@ -255,7 +255,7 @@ func TestDiskV1StoreUpgradePreservesNetworkData(t *testing.T) {
 	var version, traffic int
 	upgraded.DB.QueryRow("PRAGMA user_version").Scan(&version)
 	upgraded.DB.QueryRow("SELECT COUNT(*) FROM minutes").Scan(&traffic)
-	if version != 2 || traffic != 1 || upgraded.SourceID != source {
+	if version != 3 || traffic != 1 || upgraded.SourceID != source {
 		t.Fatal("upgrade changed existing data")
 	}
 }

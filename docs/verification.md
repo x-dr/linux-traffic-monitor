@@ -1,6 +1,73 @@
 # 验证记录
 
-日期：2026-10-30。全部操作针对本地工作区或隔离的临时数据库；没有对现有 `trafficmon/traffic.db`、`trafficmon/settings.json` 执行迁移或写入，没有部署实际 VPS。
+最后更新：2026-11-02；历史记录按各节日期保留。全部操作针对本地工作区或隔离的临时数据库；没有对现有 `trafficmon/traffic.db`、`trafficmon/settings.json` 执行迁移或写入，没有部署实际 VPS。
+
+## 监控 M2-A 网络探测（2026-11-02）
+
+本阶段在 M1 工作区基础上增量实现。设计先保存至 [交互说明](monitoring-m2a-design.md) 和 [SVG 草图](monitoring-m2a-layout.svg)，使用、备份和恢复限制见 [网络探测指南](monitoring-m2a-operations.md)。中心为 SQLite v4，Agent 源码默认版本 1.2.0、SQLite v3，基础协议 v1。
+
+- `npm test`：**66 项通过**，新增 8 项探测用例；覆盖旧 Agent、独立配置与错误、ACK、认证/CSRF、任务版本、每节点 10 项限制、历史/多来源去重、陈旧及旧版本结果、缺口/恢复、证书档位、迁移事务回滚，以及 HTTP 上报校验中的 null 保留。补充共享 fixtures 与导出 schema 检查通过。
+- 上报接口单独关闭 Ajv body 类型强制转换；否则 `null` 证书时间会被转换成 `0`，产生假的证书到期事件，失败耗时也会被转为 `0` 后错误拒绝。修复经过真实 Fastify 请求校验层测试，并由 500 项探测负载复核；原 query 参数仍保持数值转换。
+- `npm run typecheck` / `npm run build`：通过；API、Web、contracts、工具和浏览器类型检查及生产产物。`npm install --package-lock-only --ignore-scripts --offline` 核对依赖锁通过。新增声明直接使用的 `@fastify/ajv-compiler`，复用已有锁定版本，不升级其他依赖。
+- `GOCACHE=/tmp/traffic-monitor-go-cache go test -race ./... -count=1`、`go vet ./...`：通过；后续补充探测离线重试用例再运行 `go test -race ./internal/monitor -run Probe -count=1` 通过。覆盖固定 DNS 地址、混合受限解析拒绝、敏感地址不被允许网段覆盖、HTTP 2xx/503/超时/不跟随重定向/限读正文、自签名 TLS 拒绝与证书证据、IPv6 TCP、ICMP 实际回环成功及注入 EPERM 的不支持状态、独立双 worker 不阻塞采集、取消、配置持久化失败、能力降级、缺失/不匹配 ACK、预算公平分配、7 天丢弃摘要和 v2→v3 迁移。ICMP 权限失败为注入验证，未在真实受限 VPS 上运行。
+- amd64/arm64 使用 `CGO_ENABLED=0` 静态编译通过。amd64 产物用于临时浏览器 Agent；arm64 只输出 `/tmp/traffic-agent-m2a-arm64`，未进行设备运行验收。
+- `python3 tests/agent_resync_test.py`：**5 项通过**。v3 探测重传更新 SQL 和 JSON 两处 revision，保留 sample_id/source_id、基线、累计和原游标；默认预览、停止确认、独立一致性备份及高水位保护均保留。中心已有相同样本时提高 revision 仍只保留一条结果；未知任务/分配版本不会被假装恢复。
+- `XDG_CACHE_HOME=/tmp/traffic-monitor-antd-cache antd lint apps/web/src --format json`：**0 问题，无跳过文件**。
+- `npx playwright test`：最终 Chrome **完整 35 项通过，约 2.2 分钟**。新增 **3 项**通过真实页面为两个独立本机 Go Agent 下发探测、等待扩展确认与本地 HTTP 成功结果、历史对比、停用/归档仍可查询历史；另验证模拟缺口与统计、节点网络页签；1440/1024/768/390/320px 深浅主题、URL 筛选、未保存输入和抽屉键盘焦点恢复。旧版用例的 Agent 版本断言同步为 1.2.0，原功能不受影响。
+- 隔离 Docker 启动通过：缓存 `linux-traffic-monitor:control` 作为运行时，只读挂载当前 API/Web 产物及 smoke 脚本；`--network none`、UID/GID 1000、只读根目录、临时内存 `/data` 与 `/tmp`。管理员入口、SQLite v4 迁移、静态页面、认证、SSE、关闭的规则/探测保存、无通知密钥运行、套餐预览/保存及退出通过。这不是完整 Dockerfile 重新构建或新发布镜像验收。
+
+### M2-A 代表性负载
+
+命令：`LOAD_PROBES=1 LOAD_SECONDS=15 node --import tsx scripts/monitoring-load.ts`。50 模拟节点，每节点 10 个任务，共 500 分配；432,000 条资源记录（30 天、每 5 分钟）、504,000 条网卡分钟记录（7 天）、59,364 条探测记录（约 2 小时）。实际测量 15.81 秒、200 次上报、6 帧 SSE：上报 P95 **2.88ms**、总览 **327.83ms**、原历史 **56.08ms**、探测历史 **2.28ms**。75 个既有 M1 事件，模拟通知 75 条仍处于待发送；没有宣称队列排空。
+
+首次负载发现 500 个由 null→0 转换引起的假证书事件，已修复并复测消失。以上数据使用临时 SQLite、Fastify inject 和进程内模拟通知，不包含真实公网 RTT；没有同硬件/同数据的升级前后对照，也没有 50 节点满量 7 天探测历史或独立调度延迟测量，因此不声称 ≤20% 增幅或生产容量达标。
+
+截图：[手机深色](../artifacts/probes-390-dark.png)、[手机浅色](../artifacts/probes-390-light.png)、[桌面深色](../artifacts/probes-1440-dark.png)、[桌面浅色](../artifacts/probes-1440-light.png)、[多来源历史](../artifacts/probes-history-1440.png)。均为隔离数据，沿用 `artifacts/` 忽略规则。
+
+本阶段没有提交、推送、发布、变更真实服务/凭据或迁移用户库；实际 VPS、systemd/OpenRC、真实公网 HTTPS 目标、生产副本回退和 arm64 设备仍需验证。M2-B/M3 未实施。
+
+## 监控 M1-A / M1-B（2026-11-02）
+
+本节保留第一批 M1 的历史实际结果；M2-A 的当前结果见上文。M1 只操作本地工作区与临时数据库，没有部署或迁移现有用户数据。完成范围见 [升级进度](monitoring-upgrade-progress.md)，使用及备份见 [M1 指南](monitoring-m1-operations.md)。
+
+- `npm test`：最终 **58 项全部通过**。覆盖原上报/认证/配置/SSE/历史，大整数，v1/v2→v3 数据迁移及失败回滚、凭据摘要/会话保留、资源新鲜度/重复 revision/补传/时钟异常、持续时间/滞回/恢复/重启/停用/范围变化、确认、静默、维护和通知。
+- 通知覆盖最多 2 并发与任务防重入、退避和 429 上限、408/4xx/5xx、稳定阶段幂等键（恢复摘要不会沿用已尝试触发的键）、远端接收后本地提交失败、首发失败及请求在途时恢复的摘要合并、取消多余恢复、活跃事件投递证据保留、密钥缺失/错误、加密配置重新打开、脱敏、试发/重试限流。实际本地 HTTP 验证成功、超时及不跟随重定向；临时自签名 HTTPS 服务验证证书被拒绝。
+- 套餐覆盖四种口径、单网卡跨分钟汇总超过 64 位、跨档合并、周期与策略版本去重、过去周期补传、预览并发冲突、31 日/时区修改、固定计费网卡，以及首报旧配置导入重算。原周期测试继续覆盖短月、闰年、夏令时。预测验证自然日覆盖不足、零速率、当前采样异常、已超额和 max 分方向投影；纽约夏令时结束日按 25 小时计算。
+- `python3 tests/agent_resync_test.py`：**4 项通过**。另外 API 测试实际使用 SQLite Backup API 保存中心库，再恢复该备份，执行独立 Python 工具重新分配 v2 Agent 数据 revision，向恢复的中心重复上报，核对 500 字节按覆盖保留为 500、没有叠加；source_id、累计和基线保留。仅用临时库演练，不支持未经核实的旧 Agent 库恢复。
+- `npm run typecheck`、`npm run build`：通过；涵盖 API、Web、contracts、脚本及浏览器用例。`node --import tsx scripts/export-schema.ts` 已导出中心监控 schema；测试核对导出内容与 TypeBox 一致，Agent `report.schema.json` 与旧协议保持一致。
+- `XDG_CACHE_HOME=/tmp/traffic-monitor-antd-cache antd lint apps/web/src --format json`：**0 问题，无跳过文件**。
+- `npm run test:e2e`：Chrome **完整 32 项通过，约 1.7 分钟**。新增 4 项通过真实页面/API 完成规则创建→本地 Webhook 试发→触发→确认→恢复、套餐编辑→预览→保存→精确核对、维护创建/编辑/取消及界面验收。原有 28 项继续覆盖两个独立本机 Go Agent、配置确认、历史筛选、SSE、登录、刷新和主题。后端收尾修改后又运行 `npx playwright test tests/browser/monitoring.spec.ts`，新增 4 项通过（约 38 秒）。
+- 新页面在 **1440/1024/768/390/320px** 下检查深浅主题无页面横向溢出；规则纵向表单、URL 筛选/页签、自动刷新保留未保存输入、减少动画和抽屉焦点恢复通过。焦点恢复不依赖动画结束回调。
+- 在 `agent` 目录执行 `GOCACHE=/tmp/traffic-monitor-go-cache go test -race ./... -count=1`、`GOCACHE=/tmp/traffic-monitor-go-cache go vet ./...`：通过。未改 Agent 采集、存储或协议源码。
+- `CGO_ENABLED=0 GOOS=linux GOARCH=amd64/arm64 GOCACHE=/tmp/traffic-monitor-go-cache go build -buildvcs=false -o /tmp/traffic-monitor-m1-agent-<架构> ./cmd/traffic-agent`：分别执行并通过；arm64 未运行设备验证。
+- `docker compose config --quiet` 和带 `deploy/compose.notifications.yaml` 的配置检查：通过，覆盖文件只使用临时密钥路径进行解析检查。
+- 隔离 Docker 启动：使用已有 `linux-traffic-monitor:control` **作为缓存运行时**，只读挂载本次 API/Web 编译产物；非 root、只读根文件系统、`--network none` 和临时 `/data`/`/tmp`。编译后的管理员入口、中心启动、SQLite v3、静态页面、鉴权、SSE、无通知密钥运行、关闭的告警规则、套餐预览/保存及退出登录通过。**这不是完整 Dockerfile 的重新构建，也不是新发布镜像验收。**
+
+### M1 代表性负载
+
+命令：`LOAD_SECONDS=45 node --import tsx scripts/monitoring-load.ts`。
+
+| 数据或结果 | 实际值 |
+| --- | --- |
+| 模拟节点 / 上报间隔 | 50 / 5 秒 |
+| 资源记录 | 432,000 条；覆盖 30 天，每 5 分钟一条 |
+| 网卡流量 | 504,000 条；覆盖 7 天，逐分钟 |
+| 测量阶段 | 45.68 秒，500 次上报成功 |
+| 上报 P95 | 0.65ms |
+| 总览 P95 | 308.83ms |
+| 30 天历史查询 P95 | 50.76ms |
+| SSE / 告警 | 12 帧 / 75 个事件 |
+| 模拟通知 | 每条先 503 再 204；结束时 30 条成功、45 条仍在持久队列 |
+
+使用临时 SQLite、Fastify inject、进程内 SSE 和模拟通知；不含公网 RTT、TLS 成功投递或真实 VPS。资源记录为代表性 5 分钟采样，不是满量 30 天分钟记录；尚无同硬件/同数据集的升级前后对照，也未单独测量调度延迟，因此没有宣称上报增幅 ≤20% 或生产容量目标通过。队列没有在测量结束前全部排空。
+
+### 本次截图
+
+- 告警：[桌面深色](../artifacts/monitoring-alerts-1440-dark.png) · [桌面浅色](../artifacts/monitoring-alerts-1440-light.png) · [手机深色](../artifacts/monitoring-alerts-390-dark.png) · [手机浅色](../artifacts/monitoring-alerts-390-light.png)。
+- 套餐：[桌面深色](../artifacts/monitoring-quota-1440-dark.png) · [桌面浅色](../artifacts/monitoring-quota-1440-light.png) · [手机深色](../artifacts/monitoring-quota-390-dark.png) · [手机浅色](../artifacts/monitoring-quota-390-light.png)。
+- 渠道：[桌面深色](../artifacts/monitoring-channels-1440-dark.png) · [桌面浅色](../artifacts/monitoring-channels-1440-light.png) · [手机深色](../artifacts/monitoring-channels-390-dark.png) · [手机浅色](../artifacts/monitoring-channels-390-light.png)。
+
+截图包含隔离测试数据；`artifacts/` 沿用仓库忽略规则。本次尚未验证真实公网 Webhook 接收、生产密钥备份、实际用户库迁移、真实 VPS/systemd/OpenRC、arm64 设备运行，以及完整发布镜像构建。M2/M3 未实施。
 
 ## 网卡与硬盘读写历史（1.1.0）
 

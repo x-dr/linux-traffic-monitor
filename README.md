@@ -21,6 +21,8 @@
 
 网卡与磁盘历史的页面布局和统计口径见 [历史监控设计](docs/history-io-design.md)。
 
+告警、流量额度、网络探测及系统诊断的分阶段范围见 [新功能升级方案](docs/monitoring-upgrade-plan.md)。M1-A/M1-B 与 M2-A 已完成本地实现；当前交付、验证与待办见 [升级进度](docs/monitoring-upgrade-progress.md)，使用和备份说明见 [M1 指南](docs/monitoring-m1-operations.md) 与 [网络探测指南](docs/monitoring-m2a-operations.md)。
+
 ## 项目结构
 
 ```text
@@ -126,7 +128,7 @@ Debian / Ubuntu 等系统另行下载 [systemd 服务文件](deploy/trafficmon-a
 
 ### 构建程序
 
-在安装 Go 1.26+ 的构建机上，从项目根目录执行：
+在安装 Go 1.26+ 的构建机上，从项目根目录执行。API 测试中的恢复演练与 TLS 用例还需要 Python 3 和 OpenSSL；二者不参与中心生产运行：
 
 ```bash
 cd agent

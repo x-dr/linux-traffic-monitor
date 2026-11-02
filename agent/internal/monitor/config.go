@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -20,11 +21,14 @@ type Settings struct {
 }
 
 type Config struct {
-	ServerURL      string   `json:"server_url"`
-	Token          string   `json:"token"`
-	DataDir        string   `json:"data_dir"`
-	Settings       Settings `json:"settings"`
-	AppliedVersion int64    `json:"applied_config_version"`
+	ServerURL         string           `json:"server_url"`
+	Token             string           `json:"token"`
+	DataDir           string           `json:"data_dir"`
+	Settings          Settings         `json:"settings"`
+	AppliedVersion    int64            `json:"applied_config_version"`
+	Extensions        ExtensionsConfig `json:"extensions_config"`
+	AppliedExtensions int64            `json:"applied_extensions_config_version"`
+	ProbeAllowCIDRs   []string         `json:"probe_allow_cidrs,omitempty"`
 }
 
 func DefaultSettings() Settings {
@@ -101,6 +105,14 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if err = cfg.Settings.Validate(); err != nil {
 		return cfg, err
+	}
+	if err = cfg.Extensions.Validate(); err != nil || cfg.AppliedExtensions < 0 {
+		return cfg, errors.New("扩展配置无效")
+	}
+	for _, cidr := range cfg.ProbeAllowCIDRs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return cfg, errors.New("探测允许网段无效")
+		}
 	}
 	u, err := url.Parse(cfg.ServerURL)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {

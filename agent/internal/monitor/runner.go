@@ -1,37 +1,37 @@
 package monitor
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
 
 // Version can be set at build time with -ldflags '-X trafficmon/agent/internal/monitor.Version=...'.
-var Version = "1.1.0"
+var Version = "1.2.0"
 
 type Runner struct {
-	Store       *Store
-	Client      *http.Client
-	ConfigPath  string
-	mu          sync.RWMutex
-	config      Config
-	snapshot    Snapshot
-	configError *string
+	Store              *Store
+	Client             *http.Client
+	ConfigPath         string
+	mu                 sync.RWMutex
+	config             Config
+	snapshot           Snapshot
+	configError        *string
+	serverCapabilities *Capabilities
+	probesActive       bool
+	extensionsError    *string
 }
 
 func NewRunner(store *Store, cfg Config, path string) *Runner {
-	return &Runner{Store: store, ConfigPath: path, config: cfg, Client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+	var supported string
+	store.DB.QueryRow("SELECT v FROM meta WHERE k='server_probes_supported'").Scan(&supported)
+	return &Runner{Store: store, ConfigPath: path, config: cfg, probesActive: supported == "1", Client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 		return errors.New("中心地址发生重定向，请配置最终 HTTPS 地址")
 	}}}
 }
@@ -95,64 +95,6 @@ func (r *Runner) Collect(ctx context.Context, resources bool) error {
 	r.mu.Unlock()
 	return nil
 }
-func (r *Runner) Send(ctx context.Context) error {
-	report, err := r.Store.Batch()
-	if err != nil {
-		return errors.New("待同步记录读取失败")
-	}
-	r.mu.RLock()
-	cfg := r.config
-	report.Snapshot = r.snapshot
-	report.AppliedVersion = cfg.AppliedVersion
-	report.ConfigError = r.configError
-	r.mu.RUnlock()
-	if cfg.AppliedVersion == 0 {
-		report.ImportedConfig = &cfg.Settings
-	}
-	body, err := json.Marshal(report)
-	if err != nil {
-		return errors.New("上报编码失败")
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(cfg.ServerURL, "/")+"/api/v1/agent/report", bytes.NewReader(body))
-	if err != nil {
-		return errors.New("中心地址无效")
-	}
-	request.Header.Set("Authorization", "Bearer "+cfg.Token)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := r.Client.Do(request)
-	if err != nil {
-		return errors.New("中心连接失败，数据保留在本地等待重试")
-	}
-	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("中心拒绝上报（HTTP %d），本地同步进度保持不变", response.StatusCode)
-	}
-	var reply Reply
-	if err = json.NewDecoder(io.LimitReader(response.Body, 65536)).Decode(&reply); err != nil {
-		return errors.New("中心响应格式无效")
-	}
-	if err = r.Store.Acknowledge(reply.Ack, report); err != nil {
-		return err
-	}
-	if reply.ConfigVersion > cfg.AppliedVersion {
-		if err = reply.Config.Validate(); err == nil {
-			cfg.Settings = reply.Config
-			cfg.AppliedVersion = reply.ConfigVersion
-			err = SaveConfig(r.ConfigPath, cfg)
-		}
-		r.mu.Lock()
-		if err != nil {
-			message := "配置校验或持久化失败，继续使用原配置"
-			r.configError = &message
-		} else {
-			r.config = cfg
-			r.configError = nil
-		}
-		r.mu.Unlock()
-	}
-	return nil
-}
 
 func Run(ctx context.Context, cfg Config, path string, once bool) error {
 	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
@@ -180,7 +122,8 @@ func Run(ctx context.Context, cfg Config, path string, once bool) error {
 		return runner.Send(ctx)
 	}
 	var worker sync.WaitGroup
-	worker.Add(1)
+	worker.Add(2)
+	go func() { defer worker.Done(); runner.RunProbes(ctx) }()
 	go func() {
 		defer worker.Done()
 		ticker := time.NewTicker(5 * time.Second)

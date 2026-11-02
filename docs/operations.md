@@ -189,3 +189,11 @@ docker run --rm -i --read-only --tmpfs /data:uid=1000,gid=1000,mode=0700 --tmpfs
 历史 API 示例为 `/api/v1/nodes/<节点ID>/history?minutes=10080&interface=ens3&device=vda&granularity=day`。网卡与磁盘筛选互相独立；`day` 以 UTC 自然日为桶边界，但查询区间维持所选分钟范围，不额外计入区间之外的数据。响应的 `network.total`、`disk_io.total` 是字符串字节累计，`points[].disk_io` 包含读取/写入字节及观测平均速度。无磁盘数据的累计量为 `null`；有观测但无读写的累计量为 `"0"`。
 
 磁盘历史保留 30 天；网络历史仍长期保存。系统重启、设备计数器重置、不可读后恢复和超过 15 秒的采样间断会重新建立基线。短暂 Agent 重启可继续使用持久化基线；长期停采期间的磁盘 I/O 不补记。已有网络补记规则保持不变。
+
+## 监控 M1 升级
+
+告警中心、Webhook、维护静默、流量套餐、预测，以及中心回退后的 Agent 重新同步，见 [M1 使用与升级指南](monitoring-m1-operations.md)。中心数据库新增 v2→v3 迁移；Agent 数据库与 v1 上报协议不变。实际交付状态见 [升级进度](monitoring-upgrade-progress.md)。
+
+## 网络探测阶段
+
+M2-A 新增能力协商、独立探测配置、ICMP/TCP/HTTP 和证书历史。中心库升至 v4，Agent 1.2.0 库升至 v3。先升级中心，再试运行一台新 Agent；旧 Agent 继续采集原指标。任务、本地允许网段、统计口径及回退限制见 [网络探测指南](monitoring-m2a-operations.md)。本地验收不替代实际 VPS 常驻运行验证。

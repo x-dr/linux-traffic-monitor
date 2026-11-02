@@ -1,0 +1,13 @@
+# Optional overlay; paths are resolved relative to the main compose.yaml.
+services:
+  control:
+    environment:
+      NOTIFICATION_KEY_FILE: /run/secrets/notification_key
+      WEBHOOK_ALLOWED_HOSTS: "${WEBHOOK_ALLOWED_HOSTS:-}"
+      WEBHOOK_ALLOWED_CIDRS: "${WEBHOOK_ALLOWED_CIDRS:-}"
+      WEBHOOK_ALLOW_HTTP: "${WEBHOOK_ALLOW_HTTP:-false}"
+    secrets:
+      - notification_key
+secrets:
+  notification_key:
+    file: "${NOTIFICATION_KEY_PATH:?Set NOTIFICATION_KEY_PATH to a separate notification key file}"

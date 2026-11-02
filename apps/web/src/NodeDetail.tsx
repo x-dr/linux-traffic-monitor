@@ -8,9 +8,14 @@ import { bytes, date, percent, uptime } from './format';
 import { ErrorState, Gauge, LoadingState, MetricCard, PageTitle, StatusTag } from './components';
 import NodeSettings from './NodeSettings';
 import NodeHistory from './NodeHistory';
+import TrafficPolicyPanel from './TrafficPolicy';
+import NodeEvents from './NodeEvents';
+import ProbesPage from './Probes';
+import { useSearchParams } from 'react-router-dom';
 
 export default function NodeDetail() {
   const { id = '' } = useParams();
+  const [search, setSearch] = useSearchParams();
   const query = useQuery({ queryKey: ['node', id], queryFn: () => client.node(id) });
   if (query.isPending) return <LoadingState metrics />;
   if (query.isError) return <ErrorState error={query.error} />;
@@ -25,7 +30,7 @@ export default function NodeDetail() {
       title={node.status === 'pending' ? '等待 Agent 首次上报' : '当前未收到实时数据，下面展示最后已同步的记录'}
       description={node.status === 'pending' ? '请在节点接入页面完成 Agent 配置与安装。' : '历史数据已保留，连接恢复后自动更新。'} />}
     {snapshot?.error && <Alert showIcon type="warning" title={snapshot.error} />}
-    <Tabs items={[
+    <Tabs activeKey={['monitor','system','settings','quota','events','probes'].includes(search.get('tab') || '') ? search.get('tab')! : 'monitor'} onChange={tab => { const next = new URLSearchParams(search); next.set('tab', tab); setSearch(next, { preventScrollReset: true }); }} items={[
       { key: 'monitor', label: '运行监控', children: <>
         <div className="metrics-grid">
           <MetricCard title="CPU 使用率" value={percent(snapshot?.cpu_percent)} hint={`${snapshot?.cpu_cores ?? '—'} 个逻辑核心`}
@@ -47,6 +52,9 @@ export default function NodeDetail() {
           <div><span>累计合计</span><strong>{bytes(traffic.total.total_bytes)}</strong></div>
         </section>
       </> },
+      { key: 'quota', label: '流量套餐', children: <TrafficPolicyPanel node={node} /> },
+      { key: 'events', label: '事件', children: <NodeEvents id={node.id} /> },
+      { key: 'probes', label: '网络质量', children: <ProbesPage node={node.id} /> },
       { key: 'system', label: '系统信息', children: <SystemInfo node={node} /> },
       { key: 'settings', label: '节点设置', children: <NodeSettings key={`${node.id}:${node.config_version}`} node={node} /> },
     ]} />

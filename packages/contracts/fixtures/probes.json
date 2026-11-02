@@ -1,0 +1,48 @@
+{
+  "task": {
+    "name": "Example HTTPS",
+    "kind": "http",
+    "target": "https://example.com/health",
+    "port": 0,
+    "family": "ipv4",
+    "interval_seconds": 60,
+    "timeout_seconds": 3,
+    "node_ids": [
+      "277d2918-71a7-4cc3-b83c-7b7c6f33a642"
+    ],
+    "channel_ids": [],
+    "enabled": false
+  },
+  "config": {
+    "probes": [
+      {
+        "id": "1d619532-8995-4894-b11e-409378ad06f4",
+        "version": 1,
+        "start_at": 1793620800,
+        "kind": "http",
+        "target": "https://example.com/health",
+        "port": 0,
+        "family": "ipv4",
+        "interval_seconds": 60,
+        "timeout_seconds": 3
+      }
+    ]
+  },
+  "result": {
+    "sample_id": "7e1f87c0-2b01-42cf-a1f3-b6983e9a421f",
+    "task_id": "1d619532-8995-4894-b11e-409378ad06f4",
+    "task_version": 1,
+    "revision": 1000,
+    "scheduled_at": 1793620800,
+    "started_at": 1793620800.01,
+    "completed_at": 1793620800.05,
+    "status": "success",
+    "attempts": 1,
+    "latency_ms": 40,
+    "http_status": 204,
+    "certificate_expires_at": 1798804800
+  },
+  "capabilities": {
+    "probes": 1
+  }
+}

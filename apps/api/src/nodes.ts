@@ -2,6 +2,8 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import type { DB } from './database.js';
 import { monthBounds } from './periods.js';
 import { defaultConfig, type ByteSummary, type MonitorConfig, type NodeView, type Overview, type Snapshot } from '../../../packages/contracts/src/index.js';
+import { monitoringSummary } from './monitoring-summary.js';
+import { trafficBetween } from './traffic-accounting.js';
 
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 export type NodeRow = {
@@ -10,6 +12,7 @@ export type NodeRow = {
   last_sample_received_at: number | null;
   source_id: string | null; config: string; config_version: number; applied_config_version: number;
   config_error: string | null; snapshot: string | null; snapshot_revision: number;
+  enabled_at: number | null;
 };
 export function findNode(db: DB, id: string) {
   const row = db.prepare('SELECT * FROM nodes WHERE id=?').get(id) as NodeRow | undefined;
@@ -31,9 +34,10 @@ function summary(rows: { rx_bytes: bigint; tx_bytes: bigint }[]): ByteSummary {
 }
 export function trafficSummary(db: DB, id: string, cfg: MonitorConfig, now: number) {
   const [prev, curr, next] = monthBounds(now, cfg);
-  const inPeriod = (from: number, to: number) => summary(db.prepare(
-    'SELECT SUM(rx_bytes) rx_bytes,SUM(tx_bytes) tx_bytes FROM traffic_minutes WHERE node_id=? AND minute_ts>=? AND minute_ts<? GROUP BY interface',
-  ).safeIntegers().all(id, from, to) as { rx_bytes: bigint; tx_bytes: bigint }[]);
+  const inPeriod = (from: number, to: number) => {
+    const { rx, tx } = trafficBetween(db, id, null, from, to);
+    return { rx_bytes: String(rx), tx_bytes: String(tx), total_bytes: String(rx + tx) };
+  };
   const total = summary(db.prepare('SELECT rx_bytes,tx_bytes FROM traffic_totals WHERE node_id=?').safeIntegers().all(id) as { rx_bytes: bigint; tx_bytes: bigint }[]);
   return {
     total,
@@ -53,6 +57,7 @@ export function nodeView(db: DB, row: NodeRow, now = Date.now() / 1000): NodeVie
     config_version: row.config_version, applied_config_version: row.applied_config_version, config_error: row.config_error,
     snapshot: row.snapshot ? JSON.parse(row.snapshot) as Snapshot : null,
     traffic: trafficSummary(db, row.id, config, now),
+    ...monitoringSummary(db, row.id, config, now),
   };
 }
 export function listNodes(db: DB, now = Date.now() / 1000) {
@@ -72,5 +77,7 @@ export function overview(nodes: NodeView[]): Overview {
     rx_bps: active.filter(n => n.status === 'online').reduce((v, n) => v + (n.snapshot?.rx_bps || 0), 0),
     tx_bps: active.filter(n => n.status === 'online').reduce((v, n) => v + (n.snapshot?.tx_bps || 0), 0),
     month: sum('month'), total: sum('total'),
+    active_alerts: active.reduce((sum, node) => sum + (node.active_alerts ?? 0), 0),
+    quota_attention: active.filter(node => (node.quota_percent ?? 0) >= 80).length,
   };
 }

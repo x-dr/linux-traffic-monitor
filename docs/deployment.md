@@ -286,3 +286,11 @@ curl --fail --show-error https://monitor.example.com/health
 | Agent 提示配置权限或保存失败 | 配置为 `0600` 且属于服务用户，配置目录可写；使用提供的 systemd 服务及匹配的数据目录 |
 
 中心诊断命令为 `docker compose logs --tail=100 control`，Nginx 默认错误日志通常是 `/var/log/nginx/error.log`。分享诊断结果前去掉密码、Bearer token、Cookie 和 CSRF token；不要直接展示 `agent.json`。
+
+## M1 通知与配额配置
+
+本地 M1 升级使用中心数据库 v3，Agent 保持 v2。发布部署前按 [M1 升级及通知密钥指南](monitoring-m1-operations.md) 备份并验证副本；默认 Compose 无须通知密钥。需要 Webhook 时使用可选的 `deploy/compose.notifications.yaml` 单独挂载密钥，部署镜像必须包含本次源码。实际完成情况见 [进度文档](monitoring-upgrade-progress.md)。
+
+## 网络探测版本
+
+M2-A 的中心与 Agent 需分别备份和升级：中心数据库 v4；Agent 1.2.0 数据库 v3；基础上报协议仍为 v1。升级不自动启用探测，保留原凭据与流量；优先升级中心，再在一台 Agent 上验证。完整使用、私网允许网段与恢复步骤见 [网络探测指南](monitoring-m2a-operations.md)。此处为部署说明，本次未发布镜像或更新实际服务。

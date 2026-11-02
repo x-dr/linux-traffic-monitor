@@ -10,6 +10,8 @@ import { initializeAdmin } from '../apps/api/src/auth.js';
 import { createNode, findNode } from '../apps/api/src/nodes.js';
 import { ingest } from '../apps/api/src/ingest.js';
 import { defaultConfig, type AgentReport } from '../packages/contracts/src/index.js';
+import { qaMonitoring } from './qa-monitoring.js';
+import { qaProbes } from './qa-probes.js';
 
 const root = mkdtempSync(join(tmpdir(), 'traffic-browser-'));
 const db = openDatabase(join(root, 'control.db'));
@@ -51,7 +53,9 @@ for (let index = 0; index < 3; index++) {
   const last = Date.now() / 1000 - (index === 2 ? 120 : 0);
   db.prepare('UPDATE nodes SET last_received_at=?,last_sample_received_at=? WHERE id=?').run(last, last, node.id);
 }
-const app = await buildApp({ db, publicUrl: origin, webRoot: resolve('apps/web/dist') });
+const monitoring = await qaMonitoring(db, fixture, port + 1);
+const probeQA = await qaProbes(db, port + 2);
+const app = await buildApp({ db, publicUrl: origin, webRoot: resolve('apps/web/dist'), notificationKey: monitoring.key, webhookPolicy: monitoring.policy });
 await app.listen({ host: '127.0.0.1', port });
 const children: ChildProcess[] = [];
 const binary = resolve('agent/bin/traffic-agent-linux-amd64');
@@ -62,7 +66,7 @@ for (const name of ['本机采集 · A', '本机采集 · B']) {
   liveNodes.push(node.id);
   const directory = join(root, node.id); mkdirSync(directory, { mode: 0o700 });
   const cfg = join(directory, 'agent.json');
-  writeFileSync(cfg, JSON.stringify({ server_url: origin, token: node.token, data_dir: directory, settings: defaultConfig, applied_config_version: 0 }), { mode: 0o600 });
+  writeFileSync(cfg, JSON.stringify({ server_url: origin, token: node.token, data_dir: directory, settings: defaultConfig, applied_config_version: 0, probe_allow_cidrs: ['127.0.0.1/32','::1/128'] }), { mode: 0o600 });
   const child = spawn(binary, ['run', '--config', cfg], { stdio: ['ignore', 'ignore', 'pipe'] });
   child.stderr?.on('data', chunk => process.stderr.write(chunk)); children.push(child);
 }
@@ -71,7 +75,7 @@ async function stop() {
   if (stopping) return; stopping = true;
   for (const child of children) child.kill('SIGTERM');
   await Promise.all(children.map(child => new Promise<void>(resolve => { if (child.exitCode !== null) return resolve(); child.once('exit', () => resolve()); const timeout = globalThis.setTimeout(() => { child.kill('SIGKILL'); resolve(); }, 3000); timeout.unref(); })));
-  await app.close(); db.close(); rmSync(root, { recursive: true, force: true }); process.exit(0);
+  await app.close(); await monitoring.close(); await probeQA.close(); db.close(); rmSync(root, { recursive: true, force: true }); process.exit(0);
 }
 process.on('SIGTERM', () => { void stop(); }); process.on('SIGINT', () => { void stop(); });
 for (let attempt = 0; attempt < 100; attempt++) {

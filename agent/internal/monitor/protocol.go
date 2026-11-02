@@ -72,28 +72,37 @@ type Total struct {
 	TX        string `json:"tx_bytes"`
 }
 type Report struct {
-	ProtocolVersion int              `json:"protocol_version"`
-	SourceID        string           `json:"source_id"`
-	Snapshot        Snapshot         `json:"snapshot"`
-	Traffic         []TrafficMinute  `json:"traffic"`
-	Resources       []ResourceMinute `json:"resources"`
-	Totals          []Total          `json:"totals"`
-	DiskIO          []DiskMinute     `json:"disk_io,omitempty"`
-	AppliedVersion  int64            `json:"applied_config_version"`
-	ConfigError     *string          `json:"config_error"`
-	ImportedConfig  *Settings        `json:"imported_config,omitempty"`
+	ProtocolVersion   int              `json:"protocol_version"`
+	SourceID          string           `json:"source_id"`
+	Snapshot          Snapshot         `json:"snapshot"`
+	Traffic           []TrafficMinute  `json:"traffic"`
+	Resources         []ResourceMinute `json:"resources"`
+	Totals            []Total          `json:"totals"`
+	DiskIO            []DiskMinute     `json:"disk_io,omitempty"`
+	AppliedVersion    int64            `json:"applied_config_version"`
+	ConfigError       *string          `json:"config_error"`
+	ImportedConfig    *Settings        `json:"imported_config,omitempty"`
+	Capabilities      *Capabilities    `json:"capabilities,omitempty"`
+	Probes            *[]ProbeResult   `json:"probes,omitempty"`
+	AppliedExtensions *int64           `json:"applied_extensions_config_version,omitempty"`
+	ExtensionsError   *string          `json:"extensions_config_error,omitempty"`
+	ProbeDrops        *ProbeDrops      `json:"probe_drops,omitempty"`
 }
 type Ack struct {
-	Traffic   int64 `json:"traffic"`
-	Resources int64 `json:"resources"`
-	Totals    int64 `json:"totals"`
-	DiskIO    int64 `json:"disk_io,omitempty"`
+	Traffic   int64  `json:"traffic"`
+	Resources int64  `json:"resources"`
+	Totals    int64  `json:"totals"`
+	DiskIO    int64  `json:"disk_io,omitempty"`
+	Probes    *int64 `json:"probes,omitempty"`
 }
 type Reply struct {
-	Ack           Ack      `json:"ack"`
-	Config        Settings `json:"config"`
-	ConfigVersion int64    `json:"config_version"`
-	ReceivedAt    float64  `json:"received_at"`
+	Ack                Ack               `json:"ack"`
+	Config             Settings          `json:"config"`
+	ConfigVersion      int64             `json:"config_version"`
+	ReceivedAt         float64           `json:"received_at"`
+	ServerCapabilities *Capabilities     `json:"server_capabilities,omitempty"`
+	ExtensionsConfig   *ExtensionsConfig `json:"extensions_config,omitempty"`
+	ExtensionsVersion  int64             `json:"extensions_config_version,omitempty"`
 }
 
 var MetricKeys = []string{"cpu_percent", "memory_percent", "swap_percent", "load1", "rx_bps", "tx_bps"}

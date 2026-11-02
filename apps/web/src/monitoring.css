@@ -1,0 +1,27 @@
+.monitor-toolbar, .monitor-card-heading, .monitor-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.monitor-toolbar { margin-bottom: 18px; }
+.monitor-toolbar h2, .monitor-card-heading h3 { margin: 0; }
+.monitor-toolbar > p { flex: 1; min-width: 180px; }
+.monitor-cards { display: grid; gap: 12px; margin: 16px 0; }
+.monitor-card { border: 1px solid var(--border); border-radius: 12px; padding: 18px; min-width: 0; overflow-wrap: anywhere; }
+.monitor-card p { margin: 9px 0; }
+.monitor-actions { justify-content: flex-start; margin: 12px 0; }
+.monitor-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.monitor-filters > * { min-width: 0; }
+.event-title { padding: 0; height: auto; white-space: normal; text-align: left; font-size: 17px; font-weight: 600; }
+.event-detail { overflow-wrap: anywhere; }
+.event-detail dl { display: grid; grid-template-columns: 95px minmax(0, 1fr); gap: 12px; }
+.event-detail dt { color: var(--muted); }
+.event-detail dd { margin: 0; }
+.scope-preview { overflow-wrap: anywhere; font-size: 12px; }
+.notification-settings { margin-top: 24px; }
+.quota-period { overflow-wrap: anywhere; font-size: 12px; }
+.quota-facts { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 18px; margin: 22px 0; }
+.quota-facts span { display: block; color: var(--muted); margin-bottom: 8px; }
+.quota-facts strong { display: block; overflow-wrap: anywhere; }
+.policy-preview { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 12px; }
+.monitor-summary { display: flex; gap: 18px; flex-wrap: wrap; padding: 16px 20px; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 12px; }
+.monitor-summary a { display: inline-flex; align-items: center; gap: 8px; }
+.monitor-summary strong { font-size: 22px; }
+@media (max-width: 768px) { .monitor-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .quota-facts { grid-template-columns: 1fr; } }
+@media (max-width: 400px) { .monitor-filters { grid-template-columns: 1fr; } .monitor-card { padding: 14px; } }

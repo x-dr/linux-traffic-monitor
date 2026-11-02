@@ -1,4 +1,8 @@
 import { Type, type Static } from '@sinclair/typebox';
+import { CapabilitiesSchema, ExtensionsConfigSchema, ProbeDropsSchema, ProbeResultSchema, type Capabilities, type ExtensionsConfig } from './probes.js';
+export * from './alerts.js';
+export * from './traffic.js';
+export * from './probes.js';
 
 const NullableNumber = Type.Union([Type.Number({ minimum: 0 }), Type.Null()]);
 export const BytesSchema = Type.String({ pattern: '^(0|[1-9][0-9]{0,18})$' });
@@ -84,11 +88,17 @@ export const ReportSchema = Type.Object({
   applied_config_version: Type.Integer({ minimum: 0 }),
   config_error: Type.Union([Type.String({ maxLength: 2048 }), Type.Null()]),
   imported_config: Type.Optional(ConfigSchema),
+  capabilities: Type.Optional(CapabilitiesSchema),
+  probes: Type.Optional(Type.Array(ProbeResultSchema, { maxItems: 256 })),
+  applied_extensions_config_version: Type.Optional(Type.Integer({ minimum: 0 })),
+  extensions_config_error: Type.Optional(Type.Union([Type.Literal('invalid_config'), Type.Literal('persist_failed'), Type.Null()])),
+  probe_drops: Type.Optional(ProbeDropsSchema),
 }, { additionalProperties: false });
 export type AgentReport = Static<typeof ReportSchema>;
 export type ReportReply = {
-  ack: { traffic: number; resources: number; totals: number; disk_io?: number };
+  ack: { traffic: number; resources: number; totals: number; disk_io?: number; probes?: number };
   config: MonitorConfig; config_version: number; received_at: number;
+  server_capabilities?: Capabilities; extensions_config?: ExtensionsConfig; extensions_config_version?: number;
 };
 
 export type ByteSummary = { rx_bytes: string; tx_bytes: string; total_bytes: string };
@@ -100,10 +110,12 @@ export type NodeView = {
   config: MonitorConfig; config_version: number; applied_config_version: number; config_error: string | null;
   source_id: string | null; snapshot: Snapshot | null;
   traffic: { total: ByteSummary; month: PeriodSummary; previous_month: PeriodSummary };
+  active_alerts?: number; quota_percent?: number | null;
 };
 export type Overview = {
   nodes: number; online: number; stale: number; offline: number; pending: number;
   rx_bps: number; tx_bps: number; month: ByteSummary; total: ByteSummary;
+  active_alerts?: number; quota_attention?: number;
 };
 export type DiskHistoryPoint = { read_bytes: string; write_bytes: string; read_bps: number; write_bps: number };
 export type HistoryPoint = {

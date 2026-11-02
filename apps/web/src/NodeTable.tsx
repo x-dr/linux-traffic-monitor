@@ -26,7 +26,7 @@ export default function NodeTable({ nodes }: { nodes: NodeView[] }) {
           aria-label={`${expanded.includes(node.id) ? '收起' : '展开'} ${node.name} 运行详情`}
           aria-expanded={expanded.includes(node.id)} aria-controls={`node-preview-${node.id}`} onClick={() => toggle(node.id)}><DownOutlined /></button>
         <Link className="node-table-name" to={`/nodes/${node.id}`} title={`${node.name} · ${node.group || '未分组'}`}>
-          <strong>{node.name}</strong><small>{node.group || '未分组'} · {node.snapshot?.os || '等待接入'}</small>
+          <strong>{node.name}</strong><small>{node.group || '未分组'} · {node.snapshot?.os || '等待接入'}</small>{((node.active_alerts ?? 0) > 0 || node.quota_percent != null) && <small>告警 {node.active_alerts ?? 0}{node.quota_percent != null ? ` · 额度 ${node.quota_percent.toFixed(1)}%` : ''}</small>}
         </Link>
       </div> },
     { title: '状态', key: 'status', width: 98, render: (_, node) => <StatusTag status={node.status} /> },

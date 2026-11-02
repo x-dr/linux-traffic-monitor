@@ -1,0 +1,332 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "Capabilities": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "probes": {
+          "const": 1,
+          "type": "number"
+        }
+      }
+    },
+    "ExtensionsConfig": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "probes"
+      ],
+      "properties": {
+        "probes": {
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "id",
+              "version",
+              "start_at",
+              "kind",
+              "target",
+              "port",
+              "family",
+              "interval_seconds",
+              "timeout_seconds"
+            ],
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "start_at": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "const": "icmp",
+                    "type": "string"
+                  },
+                  {
+                    "const": "tcp",
+                    "type": "string"
+                  },
+                  {
+                    "const": "http",
+                    "type": "string"
+                  }
+                ]
+              },
+              "target": {
+                "minLength": 1,
+                "maxLength": 2048,
+                "type": "string"
+              },
+              "port": {
+                "minimum": 0,
+                "maximum": 65535,
+                "type": "integer"
+              },
+              "family": {
+                "anyOf": [
+                  {
+                    "const": "ipv4",
+                    "type": "string"
+                  },
+                  {
+                    "const": "ipv6",
+                    "type": "string"
+                  }
+                ]
+              },
+              "interval_seconds": {
+                "minimum": 15,
+                "maximum": 3600,
+                "type": "integer"
+              },
+              "timeout_seconds": {
+                "minimum": 1,
+                "maximum": 10,
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ProbeTask": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "target",
+        "port",
+        "family",
+        "interval_seconds",
+        "timeout_seconds",
+        "node_ids",
+        "enabled",
+        "channel_ids"
+      ],
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "const": "icmp",
+              "type": "string"
+            },
+            {
+              "const": "tcp",
+              "type": "string"
+            },
+            {
+              "const": "http",
+              "type": "string"
+            }
+          ]
+        },
+        "target": {
+          "minLength": 1,
+          "maxLength": 2048,
+          "type": "string"
+        },
+        "port": {
+          "minimum": 0,
+          "maximum": 65535,
+          "type": "integer"
+        },
+        "family": {
+          "anyOf": [
+            {
+              "const": "ipv4",
+              "type": "string"
+            },
+            {
+              "const": "ipv6",
+              "type": "string"
+            }
+          ]
+        },
+        "interval_seconds": {
+          "minimum": 15,
+          "maximum": 3600,
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "minimum": 1,
+          "maximum": 10,
+          "type": "integer"
+        },
+        "node_ids": {
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "channel_ids": {
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ProbeResult": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "sample_id",
+        "task_id",
+        "task_version",
+        "revision",
+        "scheduled_at",
+        "started_at",
+        "completed_at",
+        "status",
+        "attempts",
+        "latency_ms",
+        "http_status",
+        "certificate_expires_at"
+      ],
+      "properties": {
+        "sample_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "task_version": {
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "revision": {
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "scheduled_at": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "started_at": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "completed_at": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "const": "success",
+              "type": "string"
+            },
+            {
+              "const": "dns",
+              "type": "string"
+            },
+            {
+              "const": "tcp",
+              "type": "string"
+            },
+            {
+              "const": "tls",
+              "type": "string"
+            },
+            {
+              "const": "http",
+              "type": "string"
+            },
+            {
+              "const": "timeout",
+              "type": "string"
+            },
+            {
+              "const": "icmp",
+              "type": "string"
+            },
+            {
+              "const": "unsupported",
+              "type": "string"
+            },
+            {
+              "const": "blocked",
+              "type": "string"
+            },
+            {
+              "const": "skipped",
+              "type": "string"
+            }
+          ]
+        },
+        "attempts": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "integer"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "minimum": 100,
+              "maximum": 599,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "certificate_expires_at": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

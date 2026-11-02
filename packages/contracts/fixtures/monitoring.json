@@ -1,0 +1,11 @@
+{
+  "rule": {
+    "name": "CPU 高占用", "enabled": false, "scope": { "kind": "all", "node_ids": [], "value": "" },
+    "metric": "cpu", "object": "", "threshold": 90, "duration_seconds": 300,
+    "recovery_threshold": 80, "recovery_seconds": 120, "severity": "warning", "channel_ids": [], "repeat_seconds": 0
+  },
+  "policy": {
+    "enabled": false, "quota_bytes": "1099511627776", "input_unit": "TiB", "direction": "max",
+    "interfaces": ["ens3"], "thresholds": [80, 90, 100], "channel_ids": []
+  }
+}

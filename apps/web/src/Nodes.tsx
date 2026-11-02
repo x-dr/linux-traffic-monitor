@@ -69,6 +69,7 @@ export default function NodesPage() {
           title={<Link className="mobile-node-name" to={`/nodes/${node.id}`}>{node.name}</Link>}
           extra={<StatusTag status={node.status} />}>
           <div className="mobile-node-meta"><span>{node.group || '未分组'} · {node.snapshot?.os || '等待接入'}</span><span>{uptime(node.snapshot?.uptime_seconds)}</span></div>
+          {((node.active_alerts ?? 0) > 0 || node.quota_percent != null) && <p><Link to={`/nodes/${node.id}?tab=events`}>活跃告警 {node.active_alerts ?? 0}</Link>{node.quota_percent != null && <> · <Link to={`/nodes/${node.id}?tab=quota`}>额度 {node.quota_percent.toFixed(1)}%</Link></>}</p>}
           <div className="mobile-resource-grid">
             <div><span>CPU</span><ResourceBar node={node} value={node.snapshot?.cpu_percent} label="CPU" /></div>
             <div><span>内存</span><ResourceBar node={node} value={node.snapshot?.memory_percent} label="内存" /></div>

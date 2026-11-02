@@ -1,0 +1,396 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "AlertRule": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "enabled",
+        "scope",
+        "metric",
+        "object",
+        "threshold",
+        "duration_seconds",
+        "recovery_threshold",
+        "recovery_seconds",
+        "severity",
+        "channel_ids",
+        "repeat_seconds"
+      ],
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "scope": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "node_ids",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "all",
+                  "type": "string"
+                },
+                {
+                  "const": "nodes",
+                  "type": "string"
+                },
+                {
+                  "const": "group",
+                  "type": "string"
+                },
+                {
+                  "const": "tag",
+                  "type": "string"
+                }
+              ]
+            },
+            "node_ids": {
+              "maxItems": 50,
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "value": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "const": "offline",
+              "type": "string"
+            },
+            {
+              "const": "stale",
+              "type": "string"
+            },
+            {
+              "const": "cpu",
+              "type": "string"
+            },
+            {
+              "const": "memory",
+              "type": "string"
+            },
+            {
+              "const": "disk_percent",
+              "type": "string"
+            },
+            {
+              "const": "disk_free",
+              "type": "string"
+            },
+            {
+              "const": "bandwidth",
+              "type": "string"
+            }
+          ]
+        },
+        "object": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "threshold": {
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "type": "number"
+        },
+        "duration_seconds": {
+          "minimum": 0,
+          "maximum": 86400,
+          "type": "integer"
+        },
+        "recovery_threshold": {
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "type": "number"
+        },
+        "recovery_seconds": {
+          "minimum": 0,
+          "maximum": 86400,
+          "type": "integer"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "const": "warning",
+              "type": "string"
+            },
+            {
+              "const": "critical",
+              "type": "string"
+            }
+          ]
+        },
+        "channel_ids": {
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "repeat_seconds": {
+          "minimum": 0,
+          "maximum": 604800,
+          "type": "integer"
+        },
+        "bandwidth_mbps": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000000,
+          "type": "number"
+        }
+      }
+    },
+    "Channel": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "enabled"
+      ],
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "url": {
+          "minLength": 1,
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "authorization": {
+          "maxLength": 4096,
+          "type": "string"
+        }
+      }
+    },
+    "Maintenance": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "scope",
+        "start_at",
+        "end_at"
+      ],
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "scope": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "node_ids",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "all",
+                  "type": "string"
+                },
+                {
+                  "const": "nodes",
+                  "type": "string"
+                },
+                {
+                  "const": "group",
+                  "type": "string"
+                },
+                {
+                  "const": "tag",
+                  "type": "string"
+                }
+              ]
+            },
+            "node_ids": {
+              "maxItems": 50,
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "value": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        },
+        "start_at": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "end_at": {
+          "minimum": 0,
+          "type": "number"
+        }
+      }
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "node_ids",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "const": "all",
+              "type": "string"
+            },
+            {
+              "const": "nodes",
+              "type": "string"
+            },
+            {
+              "const": "group",
+              "type": "string"
+            },
+            {
+              "const": "tag",
+              "type": "string"
+            }
+          ]
+        },
+        "node_ids": {
+          "maxItems": 50,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "value": {
+          "maxLength": 100,
+          "type": "string"
+        }
+      }
+    },
+    "TrafficPolicy": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "enabled",
+        "quota_bytes",
+        "input_unit",
+        "direction",
+        "interfaces",
+        "thresholds",
+        "channel_ids"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "quota_bytes": {
+          "pattern": "^[1-9][0-9]{0,29}$",
+          "type": "string"
+        },
+        "input_unit": {
+          "anyOf": [
+            {
+              "const": "GB",
+              "type": "string"
+            },
+            {
+              "const": "TB",
+              "type": "string"
+            },
+            {
+              "const": "GiB",
+              "type": "string"
+            },
+            {
+              "const": "TiB",
+              "type": "string"
+            }
+          ]
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "const": "tx",
+              "type": "string"
+            },
+            {
+              "const": "rx",
+              "type": "string"
+            },
+            {
+              "const": "sum",
+              "type": "string"
+            },
+            {
+              "const": "max",
+              "type": "string"
+            }
+          ]
+        },
+        "interfaces": {
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "pattern": "^[a-zA-Z0-9_.:-]{1,15}$",
+            "type": "string"
+          }
+        },
+        "thresholds": {
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "minimum": 1,
+            "maximum": 100,
+            "type": "integer"
+          }
+        },
+        "channel_ids": {
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
