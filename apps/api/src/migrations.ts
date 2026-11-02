@@ -1,11 +1,11 @@
 import type { DB } from './database.js';
 import { migrateMonitoring } from './monitoring-migration.js';
 import { migrateDiagnostics } from './diagnostics-migration.js';
-import { migrateProbes } from './probe-migration.js';
+import { migrateProbes, migrateProbeState } from './probe-migration.js';
 
-export function migrateDatabase(db: DB, target = 5) {
+export function migrateDatabase(db: DB, target = 6) {
   const version = db.pragma('user_version', { simple: true }) as number;
-  if (version > 5) throw new Error('数据库版本高于当前程序，请使用对应版本');
+  if (version > 6) throw new Error('数据库版本高于当前程序，请使用对应版本');
   if (version === 0 && target >= 1) db.transaction(() => {
     db.exec(`
       CREATE TABLE admin (id INTEGER PRIMARY KEY CHECK(id=1), username TEXT NOT NULL, password_hash TEXT NOT NULL);
@@ -49,4 +49,5 @@ export function migrateDatabase(db: DB, target = 5) {
   if (version < 3 && target >= 3) db.transaction(() => { migrateMonitoring(db); db.pragma('user_version = 3'); })();
   if (version < 4 && target >= 4) db.transaction(() => { migrateProbes(db); db.pragma('user_version = 4'); })();
   if (version < 5 && target >= 5) db.transaction(() => { migrateDiagnostics(db); db.pragma('user_version = 5'); })();
+  if (version < 6 && target >= 6) db.transaction(() => { migrateProbeState(db); db.pragma('user_version = 6'); })();
 }

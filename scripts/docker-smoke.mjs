@@ -72,7 +72,7 @@ try {
   await reader.cancel(); controller.abort();
   assert.equal((await fetch(origin + '/api/v1/auth/logout', { method: 'POST', headers })).status, 200);
   assert.equal((await fetch(origin + '/api/v1/nodes', { headers })).status, 401);
-  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite v5, static assets, auth, SSE, disabled rule/probe/diagnostics/report, short registration, key-free monitoring, quota preview/save and logout.');
+  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite v6, static assets, auth, SSE, disabled rule/probe/diagnostics/report, short registration, key-free monitoring, quota preview/save and logout.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([new Promise(resolve => child.once('exit', resolve)), setTimeout(3000).then(() => child.kill('SIGKILL'))]);

@@ -129,7 +129,7 @@ test('v3 to v4 migration is transactional, preserves existing state and can be r
     migrateDatabase(db, 3); db.exec("INSERT INTO sessions VALUES('existing','csrf',9999999999)");
     db.exec('CREATE TABLE probe_tasks(conflict TEXT)'); assert.throws(() => migrateDatabase(db), /already exists/);
     assert.equal(db.pragma('user_version', { simple: true }), 3); assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='agent_extensions'").get(), undefined);
-    db.exec('DROP TABLE probe_tasks'); migrateDatabase(db); assert.equal(db.pragma('user_version', { simple: true }), 5);
+    db.exec('DROP TABLE probe_tasks'); migrateDatabase(db); assert.equal(db.pragma('user_version', { simple: true }), 6);
     assert.ok(db.prepare("SELECT * FROM sessions WHERE token_hash='existing'").get()); assert.deepEqual(db.pragma('foreign_key_check'), []);
   } finally { db.close(); }
 });

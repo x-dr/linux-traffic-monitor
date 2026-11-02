@@ -33,7 +33,8 @@ export function evaluateProbe(db: DB, node: string, config: ProbeAssignment, res
       if (state.successes >= 2) { resolve(state.event_id, '连续两次探测成功'); state.event_id = null; }
     }
   } else if (state.event_id) db.prepare("UPDATE alert_events SET validity='unknown' WHERE id=?").run(state.event_id);
-  db.prepare(`INSERT INTO probe_states VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(task_id,node_id) DO UPDATE SET
+  db.prepare(`INSERT INTO probe_states(task_id,node_id,version,last_at,failures,successes,event_id,first_failure_at)
+    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(task_id,node_id) DO UPDATE SET
     version=excluded.version,last_at=excluded.last_at,failures=excluded.failures,successes=excluded.successes,event_id=excluded.event_id,first_failure_at=excluded.first_failure_at`)
     .run(task.id, node, task.version, result.scheduled_at, state.failures, state.successes, state.event_id, state.first_failure_at);
   if (result.certificate_expires_at === null || !validProbe(result)) {

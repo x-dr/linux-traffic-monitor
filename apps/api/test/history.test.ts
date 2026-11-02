@@ -141,7 +141,7 @@ test('v1 database upgrades add disk tables and preserve nodes, sessions and old 
     old.exec('DROP TABLE disk_minutes; PRAGMA user_version=1;'); old.close();
     const upgraded = openDatabase(path);
     try {
-      assert.equal(upgraded.pragma('user_version', { simple: true }), 5);
+      assert.equal(upgraded.pragma('user_version', { simple: true }), 6);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM sessions').get() as { n: number }).n, 1);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM nodes').get() as { n: number }).n, 1);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM traffic_minutes').get() as { n: number }).n, 1);

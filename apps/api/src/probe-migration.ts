@@ -17,8 +17,17 @@ export function migrateProbes(db: DB) {
     CREATE INDEX probe_latest ON probe_results(task_id,node_id,task_version,scheduled_at);
     CREATE INDEX probe_retention ON probe_results(scheduled_at);
     CREATE TABLE probe_states(task_id TEXT NOT NULL,node_id TEXT NOT NULL,version INTEGER NOT NULL,last_at REAL NOT NULL DEFAULT 0,
-      failures INTEGER NOT NULL DEFAULT 0,successes INTEGER NOT NULL DEFAULT 0,event_id TEXT,first_failure_at REAL NOT NULL DEFAULT 0,PRIMARY KEY(task_id,node_id));
+      failures INTEGER NOT NULL DEFAULT 0,successes INTEGER NOT NULL DEFAULT 0,event_id TEXT,PRIMARY KEY(task_id,node_id));
     CREATE TABLE probe_certificate_events(task_id TEXT NOT NULL,node_id TEXT NOT NULL,version INTEGER NOT NULL,expires_at REAL NOT NULL,
       threshold INTEGER NOT NULL,event_id TEXT NOT NULL,PRIMARY KEY(task_id,node_id,version,expires_at,threshold));
   `);
+}
+
+export function migrateProbeState(db: DB) {
+  // Some v4/v5 databases were created before this field was added to the v4 schema.
+  const columns = db.pragma('table_info(probe_states)') as { name: string }[];
+  if (columns.some(column => column.name === 'first_failure_at')) return;
+  // Keep old counters; the last known failure is a conservative start when its first timestamp is unavailable.
+  db.exec(`ALTER TABLE probe_states ADD COLUMN first_failure_at REAL NOT NULL DEFAULT 0;
+    UPDATE probe_states SET first_failure_at=last_at WHERE failures>0;`);
 }

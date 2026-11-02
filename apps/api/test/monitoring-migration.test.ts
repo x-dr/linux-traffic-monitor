@@ -32,11 +32,11 @@ test('isolated v2 migration preserves node credentials, sessions, configurations
     old.close(); const upgraded = openDatabase(path);
     try {
       const after = upgraded.prepare('SELECT * FROM nodes').get() as Record<string, unknown>; delete after.enabled_at;
-      assert.deepEqual(after, before); assert.equal(upgraded.pragma('user_version', { simple: true }), 5);
+      assert.deepEqual(after, before); assert.equal(upgraded.pragma('user_version', { simple: true }), 6);
       assert.deepEqual(upgraded.prepare('SELECT * FROM admin').get(), admin);
       for (const table of ['sessions', 'traffic_minutes', 'traffic_totals', 'resource_minutes']) assert.ok((upgraded.prepare(`SELECT COUNT(*) n FROM ${table}`).get() as any).n > 0);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM alert_rules').get() as any).n, 0); assert.deepEqual(upgraded.pragma('foreign_key_check'), []);
-      migrateDatabase(upgraded); assert.equal(upgraded.pragma('user_version', { simple: true }), 5);
+      migrateDatabase(upgraded); assert.equal(upgraded.pragma('user_version', { simple: true }), 6);
     } finally { upgraded.close(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -2,6 +2,15 @@
 
 最后更新：2026-11-02；历史记录按各节日期保留。全部操作针对本地工作区或隔离的临时数据库；没有对现有 `trafficmon/traffic.db`、`trafficmon/settings.json` 执行迁移或写入，没有部署实际 VPS。
 
+## 旧库探测状态导致上报 HTTP 500（2026-11-02）
+
+- 中心实际错误：`table probe_states has 7 columns but 8 values were supplied`。只读检查工作区 `data/control.db` 确认为 v5 / 7 列，缺少 `first_failure_at`；新建数据库已有该字段，因此此前的新库用例没有覆盖旧表问题。
+- 增加 v6 增量事务迁移并显式指定状态插入列。新增 4 项回归，覆盖 v4/v5 旧表、已有字段的旧库、失败回滚和重试，以及 HTTP 校验层的 500→迁移→原批次重传/ACK/去重→连续失败告警→连续成功恢复。
+- 定向 `node --import tsx --test --test-isolation=none apps/api/test/probe-migration.test.ts apps/api/test/probes.test.ts`：**12 项通过**。完整 `npm test` 首次受沙箱本机监听和子进程限制影响，76 项通过、4 项 EPERM；在允许本机临时服务和 Python 子进程的环境重跑后，**80 项全部通过，0 失败**。
+- `npm run typecheck -w @traffic/api`、`npm run build -w @traffic/api`、`git diff --check`：通过。未重跑浏览器、Go 或 Docker smoke；本次只修改中心数据库迁移与探测状态写入，Docker smoke 仅同步版本说明。
+- 开发中心 `tsx watch` 保存源码后自动重载，工作区数据库已升级为 v6 / 8 列，`http://127.0.0.1:8766/health` 返回 `{"ok":true}`。只读连续观察 15 秒：成功上报计数 **82→85**，探测结果 **8→9**，接收和新快照时间均继续前进，结束时上报距当前不足 1 秒。对升级后的数据库创建临时一致性副本，完整性和外键检查通过；此副本不是升级前备份，旧库迁移由隔离回归覆盖。
+- 未手动重启服务、提交、推送或发布。开发中心已自动应用；其他部署更新程序后需启动迁移，回退须配套恢复升级前数据库备份。
+
 ## 监控 M2-B / M3（2026-11-02）
 
 在 M1/M2-A 基础上补齐剩余阶段。先保存 [设计](monitoring-m2b-m3-design.md) 与 [布局](monitoring-m2b-m3-layout.svg)，使用及恢复说明见 [指南](monitoring-m2b-m3-operations.md)。中心 v5、Agent v4，源码默认 1.3.0；基础协议仍为 v1，新采集默认关闭。
