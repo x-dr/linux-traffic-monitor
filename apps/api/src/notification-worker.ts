@@ -91,6 +91,8 @@ export class NotificationWorker {
       if (Number.isFinite(parsed)) delay = Math.min(1800, Math.max(delay, parsed));
     }
     this.db.transaction(() => {
+      // The node and its deliveries may be deleted while the request is in flight.
+      if (!this.db.prepare('SELECT 1 FROM notification_outbox WHERE id=?').get(message.id)) return;
       this.db.prepare('INSERT INTO notification_attempts VALUES(?,?,?,?,?)').run(randomUUID(), message.id, this.clock(), status, error);
       // Configuration can cancel a message while its HTTP request is in flight.
       this.db.prepare(`UPDATE notification_outbox SET status=?,last_error=?,next_attempt_at=?,sent_at=? WHERE id=? AND status='sending'`)

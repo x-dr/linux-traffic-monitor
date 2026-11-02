@@ -13,6 +13,7 @@ import { ConfigSchema, DeviceSchema, InterfaceSchema, NodeCreateSchema, NodePatc
 import { openDatabase, pruneResources, type DB } from './database.js';
 import { installAuth, httpError } from './auth.js';
 import { createNode, findNode, listNodes, nodeView, overview } from './nodes.js';
+import { deleteNode } from './node-deletion.js';
 import { ingest } from './ingest.js';
 import { history } from './history.js';
 import { validateTimezone } from './periods.js';
@@ -81,6 +82,11 @@ export async function buildApp(options: AppOptions = {}) {
   });
   const params = Type.Object({ id: Type.String({ format: 'uuid' }) });
   app.get<{ Params: { id: string } }>('/api/v1/nodes/:id', { schema: { params } }, async req => nodeView(db, findNode(db, req.params.id), now()));
+  app.delete<{ Params: { id: string } }>('/api/v1/nodes/:id', { schema: { params } }, async req => {
+    deleteNode(db, req.params.id);
+    hub.broadcast();
+    return { ok: true };
+  });
   app.patch<{ Params: { id: string }; Body: Static<typeof NodePatchSchema> }>('/api/v1/nodes/:id', { schema: { params, body: NodePatchSchema } }, async req => {
     const old = findNode(db, req.params.id), body = req.body;
     if (body.name !== undefined && !body.name.trim()) throw httpError(400, '名称不能为空');

@@ -25,5 +25,6 @@ export const client = {
     return api<History>(`/nodes/${id}/history?${params}`);
   },
   patchNode: (id: string, data: Partial<Pick<NodeView, 'name' | 'group' | 'tags' | 'enabled' | 'archived'>>) => api<NodeView>(`/nodes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteNode: (id: string) => api<{ ok: true }>(`/nodes/${id}`, { method: 'DELETE' }),
   configure: (id: string, data: MonitorConfig) => api<NodeView>(`/nodes/${id}/config`, { method: 'PUT', body: JSON.stringify(data) }),
 };

@@ -194,6 +194,8 @@ sudo journalctl -u trafficmon-agent --no-pager -n 30
 
 接入后在节点详情核对主机名、资源、流量和配置应用状态。停用或归档会暂停中心接收，Agent 仍保留本地数据，恢复后继续补传。旧版迁移请先按下方迁移步骤准备目标目录，再安装服务。
 
+永久移除节点可在“节点设置 → 节点状态管理 → 删除节点”操作，确认后清除中心端节点及关联历史，原令牌立即失效。服务器上的 Agent 需自行停止或卸载；删除范围见 [删除节点说明](docs/node-deletion.md)。
+
 ## 配置
 
 ### 中心环境变量
@@ -279,7 +281,7 @@ traffic-agent migrate --legacy-db /旧目录/traffic.db --legacy-settings /旧�
 | `POST` | `/api/v1/auth/logout`、`/api/v1/auth/password` | 退出登录、修改密码 |
 | `GET` | `/api/v1/overview` | 总览统计 |
 | `GET` / `POST` | `/api/v1/nodes` | 查询节点、创建节点并返回一次性展示的凭据 |
-| `GET` / `PATCH` | `/api/v1/nodes/:id` | 节点详情、资料与状态管理 |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/nodes/:id` | 节点详情、资料与状态管理；永久删除节点及关联数据 |
 | `PUT` | `/api/v1/nodes/:id/config` | 下发监控配置 |
 | `GET` / `PUT` | `/api/v1/nodes/:id/reporting` | 查看 / 设置 Agent 上报间隔；写入需 `interval_seconds` 与 `expected_version` |
 | `GET` | `/api/v1/nodes/:id/history?minutes=60` | 历史数据，范围 5～43200 分钟；可选 `interface`、`device` 和 `granularity=auto\|hour\|day`，返回设备选项与区间累计量 |
