@@ -11,6 +11,9 @@ import NodeHistory from './NodeHistory';
 import TrafficPolicyPanel from './TrafficPolicy';
 import NodeEvents from './NodeEvents';
 import ProbesPage from './Probes';
+import NodeTelemetry from './NodeTelemetry';
+import NodeAsset from './NodeAsset';
+import LongHistory from './LongHistory';
 import { useSearchParams } from 'react-router-dom';
 
 export default function NodeDetail() {
@@ -30,7 +33,7 @@ export default function NodeDetail() {
       title={node.status === 'pending' ? '等待 Agent 首次上报' : '当前未收到实时数据，下面展示最后已同步的记录'}
       description={node.status === 'pending' ? '请在节点接入页面完成 Agent 配置与安装。' : '历史数据已保留，连接恢复后自动更新。'} />}
     {snapshot?.error && <Alert showIcon type="warning" title={snapshot.error} />}
-    <Tabs activeKey={['monitor','system','settings','quota','events','probes'].includes(search.get('tab') || '') ? search.get('tab')! : 'monitor'} onChange={tab => { const next = new URLSearchParams(search); next.set('tab', tab); setSearch(next, { preventScrollReset: true }); }} items={[
+    <Tabs activeKey={['monitor','system','settings','quota','events','probes','diagnostics','workloads','asset','long-history'].includes(search.get('tab') || '') ? search.get('tab')! : 'monitor'} onChange={tab => { const next = new URLSearchParams(search); next.set('tab', tab); setSearch(next, { preventScrollReset: true }); }} items={[
       { key: 'monitor', label: '运行监控', children: <>
         <div className="metrics-grid">
           <MetricCard title="CPU 使用率" value={percent(snapshot?.cpu_percent)} hint={`${snapshot?.cpu_cores ?? '—'} 个逻辑核心`}
@@ -52,6 +55,10 @@ export default function NodeDetail() {
           <div><span>累计合计</span><strong>{bytes(traffic.total.total_bytes)}</strong></div>
         </section>
       </> },
+      { key: 'diagnostics', label: '系统诊断', children: <NodeTelemetry id={node.id} /> },
+      { key: 'workloads', label: '容器与进程', children: <NodeTelemetry id={node.id} stream="workloads" /> },
+      { key: 'long-history', label: '长期历史', children: <LongHistory id={node.id} /> },
+      { key: 'asset', label: '资产', children: <NodeAsset id={node.id} /> },
       { key: 'quota', label: '流量套餐', children: <TrafficPolicyPanel node={node} /> },
       { key: 'events', label: '事件', children: <NodeEvents id={node.id} /> },
       { key: 'probes', label: '网络质量', children: <ProbesPage node={node.id} /> },

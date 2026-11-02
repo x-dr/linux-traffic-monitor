@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -13,25 +14,30 @@ import (
 )
 
 // Version can be set at build time with -ldflags '-X trafficmon/agent/internal/monitor.Version=...'.
-var Version = "1.2.0"
+var Version = "1.3.0"
 
 type Runner struct {
-	Store              *Store
-	Client             *http.Client
-	ConfigPath         string
-	mu                 sync.RWMutex
-	config             Config
-	snapshot           Snapshot
-	configError        *string
-	serverCapabilities *Capabilities
-	probesActive       bool
-	extensionsError    *string
+	Store                 *Store
+	Client                *http.Client
+	ConfigPath            string
+	mu                    sync.RWMutex
+	config                Config
+	snapshot              Snapshot
+	configError           *string
+	serverCapabilities    *Capabilities
+	probesActive          bool
+	telemetryCapabilities Capabilities
+	extensionsError       *string
 }
 
 func NewRunner(store *Store, cfg Config, path string) *Runner {
 	var supported string
 	store.DB.QueryRow("SELECT v FROM meta WHERE k='server_probes_supported'").Scan(&supported)
-	return &Runner{Store: store, ConfigPath: path, config: cfg, probesActive: supported == "1", Client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+	var telemetry Capabilities
+	var raw string
+	store.DB.QueryRow("SELECT v FROM meta WHERE k='telemetry_capabilities'").Scan(&raw)
+	json.Unmarshal([]byte(raw), &telemetry)
+	return &Runner{telemetryCapabilities: telemetry, Store: store, ConfigPath: path, config: cfg, probesActive: supported == "1", Client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 		return errors.New("中心地址发生重定向，请配置最终 HTTPS 地址")
 	}}}
 }
@@ -122,7 +128,9 @@ func Run(ctx context.Context, cfg Config, path string, once bool) error {
 		return runner.Send(ctx)
 	}
 	var worker sync.WaitGroup
-	worker.Add(2)
+	worker.Add(4)
+	go func() { defer worker.Done(); runner.RunDiagnostics(ctx) }()
+	go func() { defer worker.Done(); runner.RunWorkloads(ctx) }()
 	go func() { defer worker.Done(); runner.RunProbes(ctx) }()
 	go func() {
 		defer worker.Done()

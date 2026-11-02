@@ -8,7 +8,7 @@ export const ScopeSchema = Type.Object({
 export type AlertScope = Static<typeof ScopeSchema>;
 export const AlertRuleSchema = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 100 }), enabled: Type.Boolean(), scope: ScopeSchema,
-  metric: Type.Union((['offline', 'stale', 'cpu', 'memory', 'disk_percent', 'disk_free', 'bandwidth'] as const).map(v => Type.Literal(v))),
+  metric: Type.Union((['offline', 'stale', 'cpu', 'memory', 'disk_percent', 'disk_free', 'bandwidth', 'iowait', 'steal', 'psi_cpu', 'psi_memory', 'psi_io', 'inode', 'read_iops', 'write_iops', 'service_down', 'process_down'] as const).map(v => Type.Literal(v))),
   object: Type.String({ maxLength: 4096 }), threshold: Type.Number({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   duration_seconds: Type.Integer({ minimum: 0, maximum: 86400 }),
   recovery_threshold: Type.Number({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),

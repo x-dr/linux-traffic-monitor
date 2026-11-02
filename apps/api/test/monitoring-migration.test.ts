@@ -23,18 +23,20 @@ test('isolated v2 migration preserves node credentials, sessions, configurations
     const path = join(root, 'control.db'), old = new Database(path); migrateDatabase(old, 2);
     initializeAdmin(old, 'migration-admin', TEST_PASSWORD);
     const node = createNode(old, { name: 'v2 existing' }, fixture.snapshot.observed_at);
+    old.exec("CREATE TABLE rollup_dirty(node_id TEXT,domain TEXT,bucket INTEGER,PRIMARY KEY(node_id,domain,bucket))");
     ingest(old, `Bearer ${node.token}`, structuredClone(fixture), fixture.snapshot.observed_at);
+    old.exec("DROP TABLE rollup_dirty");
     old.prepare('INSERT INTO sessions VALUES(?,?,?)').run('hash-only', 'test-csrf', 9999999999);
     const before = old.prepare('SELECT * FROM nodes').get() as Record<string, unknown>;
     const admin = old.prepare('SELECT * FROM admin').get();
     old.close(); const upgraded = openDatabase(path);
     try {
       const after = upgraded.prepare('SELECT * FROM nodes').get() as Record<string, unknown>; delete after.enabled_at;
-      assert.deepEqual(after, before); assert.equal(upgraded.pragma('user_version', { simple: true }), 4);
+      assert.deepEqual(after, before); assert.equal(upgraded.pragma('user_version', { simple: true }), 5);
       assert.deepEqual(upgraded.prepare('SELECT * FROM admin').get(), admin);
       for (const table of ['sessions', 'traffic_minutes', 'traffic_totals', 'resource_minutes']) assert.ok((upgraded.prepare(`SELECT COUNT(*) n FROM ${table}`).get() as any).n > 0);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM alert_rules').get() as any).n, 0); assert.deepEqual(upgraded.pragma('foreign_key_check'), []);
-      migrateDatabase(upgraded); assert.equal(upgraded.pragma('user_version', { simple: true }), 4);
+      migrateDatabase(upgraded); assert.equal(upgraded.pragma('user_version', { simple: true }), 5);
     } finally { upgraded.close(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

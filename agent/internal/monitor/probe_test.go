@@ -164,7 +164,7 @@ func TestProbeIndependentACKRetentionAndV2Migration(t *testing.T) {
 	}
 	var version int
 	s.DB.QueryRow("PRAGMA user_version").Scan(&version)
-	if version != 3 {
+	if version != 4 {
 		t.Fatal(version)
 	}
 	now := time.Now()

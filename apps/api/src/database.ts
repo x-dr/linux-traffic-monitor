@@ -1,3 +1,4 @@
+import { processRollups } from './history-rollups.js';
 import { migrateDatabase } from './migrations.js';
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
@@ -20,8 +21,11 @@ export function openDatabase(path: string): DB {
 }
 
 export function pruneResources(db: DB, now = Date.now() / 1000) {
-  const result = db.prepare('DELETE FROM resource_minutes WHERE minute_ts < ?').run(Math.floor(now - 30 * 86400));
-  db.prepare('DELETE FROM disk_minutes WHERE minute_ts < ?').run(Math.floor(now - 30 * 86400));
+  processRollups(db,1000);
+  const safe=(domain:string)=>`NOT EXISTS(SELECT 1 FROM rollup_dirty d WHERE d.node_id=outer.node_id AND d.domain='${domain}' AND d.bucket=outer.minute_ts/3600*3600)`;
+  const result = db.prepare(`DELETE FROM resource_minutes AS outer WHERE minute_ts < ? AND ${safe('resource')}`).run(Math.floor((now-30*86400)/3600)*3600);
+  db.prepare(`DELETE FROM disk_minutes AS outer WHERE minute_ts < ? AND ${safe('disk')}`).run(Math.floor((now-30*86400)/3600)*3600);
+  db.prepare(`DELETE FROM telemetry_minutes AS outer WHERE minute_ts<? AND NOT EXISTS(SELECT 1 FROM rollup_dirty d WHERE d.node_id=outer.node_id AND d.domain=outer.stream AND d.bucket=outer.minute_ts/3600*3600)`).run(Math.floor((now-30*86400)/3600)*3600);
   db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now);
   return result.changes;
 }

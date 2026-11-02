@@ -100,6 +100,46 @@
             {
               "const": "bandwidth",
               "type": "string"
+            },
+            {
+              "const": "iowait",
+              "type": "string"
+            },
+            {
+              "const": "steal",
+              "type": "string"
+            },
+            {
+              "const": "psi_cpu",
+              "type": "string"
+            },
+            {
+              "const": "psi_memory",
+              "type": "string"
+            },
+            {
+              "const": "psi_io",
+              "type": "string"
+            },
+            {
+              "const": "inode",
+              "type": "string"
+            },
+            {
+              "const": "read_iops",
+              "type": "string"
+            },
+            {
+              "const": "write_iops",
+              "type": "string"
+            },
+            {
+              "const": "service_down",
+              "type": "string"
+            },
+            {
+              "const": "process_down",
+              "type": "string"
             }
           ]
         },

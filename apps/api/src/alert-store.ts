@@ -54,6 +54,8 @@ export function validateRule(db: DB, rule: AlertRuleInput) {
   if (['disk_percent', 'disk_free'].includes(rule.metric) && !rule.object.startsWith('/')) throw httpError(400, '磁盘规则需要绝对挂载点');
   if (rule.metric === 'bandwidth' && !rule.bandwidth_mbps) throw httpError(400, '带宽规则需要 Mbps 容量');
   if (['offline', 'stale'].includes(rule.metric) && (rule.threshold < 15 || rule.recovery_threshold <= 0 || rule.recovery_threshold > 15)) throw httpError(400, '连接告警等待至少 15 秒，恢复新鲜度须为 1～15 秒');
-  if (['cpu', 'memory', 'disk_percent', 'bandwidth'].includes(rule.metric) && (rule.threshold > 100 || rule.recovery_threshold > 100)) throw httpError(400, '百分比须为 0～100');
-  if (!['offline', 'stale'].includes(rule.metric) && (rule.metric === 'disk_free' ? rule.recovery_threshold <= rule.threshold : rule.recovery_threshold >= rule.threshold)) throw httpError(400, '恢复阈值必须形成滞回区间');
+  if (['cpu', 'memory', 'disk_percent', 'bandwidth','iowait','steal','psi_cpu','psi_memory','psi_io','inode'].includes(rule.metric) && (rule.threshold > 100 || rule.recovery_threshold > 100)) throw httpError(400, '百分比须为 0～100');
+  if (['service_down','process_down'].includes(rule.metric) && (rule.threshold<=0||rule.threshold>=1||rule.recovery_threshold<=0||rule.recovery_threshold>=1||rule.recovery_threshold>rule.threshold))throw httpError(400,'停止规则阈值须在 0 和 1 之间，恢复阈值不高于触发阈值');
+  if(['inode','read_iops','write_iops','service_down','process_down'].includes(rule.metric)&&!rule.object)throw httpError(400,'此规则需要诊断对象名称');
+  if (!['offline', 'stale','service_down','process_down'].includes(rule.metric) && (rule.metric === 'disk_free' ? rule.recovery_threshold <= rule.threshold : rule.recovery_threshold >= rule.threshold)) throw httpError(400, '恢复阈值必须形成滞回区间');
 }

@@ -1,3 +1,4 @@
+import { serverCapabilities } from './telemetry-store.js';
 import type { AgentReport, ReportReply, ProbeAssignment, ProbeResult } from '../../../packages/contracts/src/index.js';
 import type { DB } from './database.js';
 import type { NodeRow } from './nodes.js';
@@ -7,11 +8,12 @@ import { extensionsConfig, extensionsView } from './probe-store.js';
 import { evaluateProbe } from './probe-alerts.js';
 
 export function ingestProbes(db: DB, node: NodeRow, report: AgentReport, now: number): Partial<ReportReply> {
-  const extra = report.probes !== undefined || report.applied_extensions_config_version !== undefined || report.extensions_config_error !== undefined || report.probe_drops !== undefined;
+  if((report.applied_extensions_config_version!==undefined||report.extensions_config_error!==undefined)&&!report.capabilities)throw httpError(400,'扩展配置确认需要声明能力');
+  const extra = report.probes !== undefined || report.probe_drops !== undefined;
   if (extra && report.capabilities?.probes !== 1) throw httpError(400, '探测扩展需要协商 probes:1');
-  if (!report.capabilities) return { server_capabilities: { probes: 1 } };
+  if (!report.capabilities) return { server_capabilities: serverCapabilities };
   db.prepare(`INSERT INTO agent_extensions(node_id,capabilities) VALUES(?,?) ON CONFLICT(node_id) DO UPDATE SET capabilities=excluded.capabilities`).run(node.id, JSON.stringify(report.capabilities));
-  if (report.capabilities.probes !== 1) return { server_capabilities: { probes: 1 } };
+
   const view = extensionsView(db, node.id);
   if ((report.applied_extensions_config_version ?? 0) > view.config_version) throw httpError(409, '扩展配置确认超出中心版本，请检查是否恢复过中心数据库');
   db.prepare('UPDATE agent_extensions SET applied_version=?,error=?,drops=? WHERE node_id=?').run(report.applied_extensions_config_version ?? 0,
@@ -40,7 +42,7 @@ export function ingestProbes(db: DB, node: NodeRow, report: AgentReport, now: nu
     }
     if (changed.changes && assignment.end_at === null) evaluateProbe(db, node.id, config, result, now);
   }
-  return { server_capabilities: { probes: 1 }, extensions_config: extensionsConfig(db, node.id), extensions_config_version: view.config_version };
+  return { server_capabilities: serverCapabilities, extensions_config: extensionsConfig(db, node.id, report.capabilities), extensions_config_version: view.config_version };
 }
 function validateResult(r: ProbeResult, now: number) {
   if (r.scheduled_at > r.started_at || r.started_at > r.completed_at || r.completed_at > now + 300 || r.completed_at - r.started_at > 15) throw httpError(400, '探测结果时间无效');

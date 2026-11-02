@@ -12,6 +12,7 @@ import { ingest } from '../apps/api/src/ingest.js';
 import { defaultConfig, type AgentReport } from '../packages/contracts/src/index.js';
 import { qaMonitoring } from './qa-monitoring.js';
 import { qaProbes } from './qa-probes.js';
+import { qaDiagnostics } from './qa-diagnostics.js';
 
 const root = mkdtempSync(join(tmpdir(), 'traffic-browser-'));
 const db = openDatabase(join(root, 'control.db'));
@@ -53,17 +54,19 @@ for (let index = 0; index < 3; index++) {
   const last = Date.now() / 1000 - (index === 2 ? 120 : 0);
   db.prepare('UPDATE nodes SET last_received_at=?,last_sample_received_at=? WHERE id=?').run(last, last, node.id);
 }
+qaDiagnostics(db,fixture);
 const monitoring = await qaMonitoring(db, fixture, port + 1);
 const probeQA = await qaProbes(db, port + 2);
 const app = await buildApp({ db, publicUrl: origin, webRoot: resolve('apps/web/dist'), notificationKey: monitoring.key, webhookPolicy: monitoring.policy });
 await app.listen({ host: '127.0.0.1', port });
 const children: ChildProcess[] = [];
-const binary = resolve('agent/bin/traffic-agent-linux-amd64');
+const binary = resolve(process.env.QA_AGENT_BINARY || 'agent/bin/traffic-agent-linux-amd64');
 if (!existsSync(binary)) throw new Error('请先构建 amd64 Go Agent');
 const liveNodes = [];
 for (const name of ['本机采集 · A', '本机采集 · B']) {
   const node = createNode(db, { name, group: '真实本机 Agent', tags: ['集成验收'] }, Date.now() / 1000);
   liveNodes.push(node.id);
+  if(name.endsWith('A'))db.prepare('INSERT INTO diagnostic_settings VALUES(?,?)').run(node.id,JSON.stringify({diagnostics:{enabled:true,services:[]},workloads:{enabled:false,docker:false,processes:[]}}));
   const directory = join(root, node.id); mkdirSync(directory, { mode: 0o700 });
   const cfg = join(directory, 'agent.json');
   writeFileSync(cfg, JSON.stringify({ server_url: origin, token: node.token, data_dir: directory, settings: defaultConfig, applied_config_version: 0, probe_allow_cidrs: ['127.0.0.1/32','::1/128'] }), { mode: 0o600 });

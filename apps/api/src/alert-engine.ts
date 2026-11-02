@@ -1,3 +1,4 @@
+import { telemetryReading } from './telemetry-alerts.js';
 import type { AlertRuleInput, AlertValidity, Snapshot } from '../../../packages/contracts/src/index.js';
 import type { DB } from './database.js';
 import type { NodeRow } from './nodes.js';
@@ -5,14 +6,15 @@ import { closeEvents, eventById, matches, newEvent, nodeEvent } from './alert-st
 import { enqueue, enqueueRecovery } from './notification-queue.js';
 
 type State = { phase: 'normal' | 'pending' | 'firing' | 'recovering'; since: number; event: string | null;
-  revision: number; observed: number; evaluated: number; repeat: number; next_repeat: number };
-type Reading = { value: number | null; validity: AlertValidity; observed: number; revision: number };
+  revision: number; observed: number; evaluated: number; repeat: number; next_repeat: number; identity?: string };
+type Reading = { value: number | null; validity: AlertValidity; observed: number; revision: number; maxGap?: number; identity?: string };
 export function resourceFresh(node: NodeRow, now: number) {
   const s = node.snapshot ? JSON.parse(node.snapshot) as Snapshot : null;
   return !!s && !s.error && node.last_sample_received_at !== null && now - node.last_sample_received_at <= 15
     && node.last_received_at !== null && now - node.last_received_at <= 15 && now - s.observed_at <= 15 && s.observed_at <= now + 5;
 }
-function reading(node: NodeRow, rule: AlertRuleInput, now: number): Reading {
+function reading(db: DB, node: NodeRow, rule: AlertRuleInput, now: number): Reading {
+  const extended = telemetryReading(db, node.id, rule, now); if (extended) return extended;
   const s = node.snapshot ? JSON.parse(node.snapshot) as Snapshot : null;
   if (rule.metric === 'offline') return { value: now - node.last_received_at!, validity: 'fresh', observed: now, revision: node.snapshot_revision };
   if (rule.metric === 'stale') return { value: now - Math.min(node.last_sample_received_at ?? 0, s?.observed_at ?? 0), validity: 'fresh', observed: now, revision: node.snapshot_revision };
@@ -59,7 +61,7 @@ export class AlertEngine {
           if (enabledAt && now - enabledAt < Math.max(120, rule.threshold) && node.last_received_at < enabledAt) continue;
           const state: State = row ? JSON.parse(row.data) : { phase: 'normal', since: 0, event: null, revision: -1, observed: 0, evaluated: 0, repeat: 0, next_repeat: 0 };
           if (!row) nodeEvent(this.db, node.id, 'rule_scope_joined', now, rule.name);
-          const point = reading(node, rule, now);
+          const point = reading(this.db, node, rule, now);
           this.advance(id, node, rule, state, point, now);
           this.db.prepare('INSERT INTO alert_states VALUES(?,?,?,?) ON CONFLICT(rule_id,node_id,object) DO UPDATE SET data=excluded.data')
             .run(id, node.id, rule.object, JSON.stringify(state));
@@ -74,7 +76,7 @@ export class AlertEngine {
   }
   private advance(id: string, node: NodeRow, rule: AlertRuleInput, state: State, point: Reading, now: number) {
     const wallClock = ['offline', 'stale'].includes(rule.metric);
-    const disconnected = state.evaluated === 0 || now - state.evaluated > 15 || (!wallClock && point.observed - state.observed > 15);
+    const disconnected = state.evaluated === 0 || now - state.evaluated > (point.maxGap ?? 15) || (!wallClock && point.observed - state.observed > (point.maxGap ?? 15) || (point.identity !== undefined && point.identity !== state.identity));
     state.evaluated = now;
     if (point.validity !== 'fresh') {
       if (state.phase === 'pending') { state.phase = 'normal'; state.since = 0; }
@@ -87,7 +89,7 @@ export class AlertEngine {
       if (state.phase === 'pending') state.phase = 'normal';
       if (state.phase === 'recovering') state.phase = 'firing';
     }
-    state.revision = point.revision; state.observed = point.observed;
+    state.identity = point.identity; state.revision = point.revision; state.observed = point.observed;
     const value = point.value!;
     const bad = rule.metric === 'disk_free' ? value < rule.threshold : value > rule.threshold;
     const good = wallClock ? (rule.metric === 'offline' ? now - node.last_received_at! <= Math.min(15, rule.recovery_threshold) : resourceFresh(node, now) && value <= Math.min(15, rule.recovery_threshold))

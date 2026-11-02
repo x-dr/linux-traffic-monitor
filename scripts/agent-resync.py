@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline v2/v3 Agent maintenance. Preview by default; never stop services."""
+"""Offline v2/v3/v4 Agent maintenance. Preview by default; never stop services."""
 import argparse
 from datetime import datetime, timezone
 import json
@@ -38,11 +38,14 @@ def maintain(path, start, end, apply=False, stopped=False, backup=None, revision
     try:
         db.execute('PRAGMA busy_timeout=10000')
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (2, 3):
-            raise ValueError('仅支持已有的 v2/v3 Agent 数据库')
+        if version not in (2, 3, 4):
+            raise ValueError('仅支持已有的 v2/v3/v4 Agent 数据库')
         streams = dict(STREAMS)
-        if version == 3:
+        if version >= 3:
             streams['probes'] = ('probe_results', 'scheduled_at>=? AND scheduled_at<?', 'sample_id')
+        if version >= 4:
+            for stream in ('diagnostics', 'workloads'):
+                streams[stream] = ('telemetry_minutes', f"stream='{stream}' AND minute_ts>=? AND minute_ts<?", 'stream,minute_ts')
         source = db.execute("SELECT v FROM meta WHERE k='source_id'").fetchone()
         if not source or not source[0] or not db.execute("SELECT 1 FROM sqlite_master WHERE name='baselines'").fetchone():
             raise ValueError('不是有效 Agent 数据库')
@@ -85,6 +88,11 @@ def maintain(path, start, end, apply=False, stopped=False, backup=None, revision
                 for row in rows:
                     sequence += 1
                     db.execute(f'UPDATE {table} SET revision=? WHERE {where}', (sequence, *row))
+                    if stream in ('diagnostics', 'workloads'):
+                        raw = db.execute('SELECT data FROM telemetry_minutes WHERE stream=? AND minute_ts=?', row).fetchone()[0]
+                        sample = json.loads(raw)
+                        sample['revision'] = sequence
+                        db.execute('UPDATE telemetry_minutes SET data=? WHERE stream=? AND minute_ts=?', (json.dumps(sample, separators=(',', ':')), *row))
                     if stream == 'probes':
                         raw = db.execute('SELECT result FROM probe_results WHERE sample_id=?', row).fetchone()[0]
                         sample = json.loads(raw)
@@ -115,7 +123,7 @@ def main():
         result = maintain(args.db, timestamp(args.start), timestamp(args.end), args.apply, args.agent_stopped, args.backup, args.revision_floor)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (ValueError, OSError, sqlite3.Error):
-        parser.exit(1, '重新同步未完成：检查 v2/v3 Agent 库、停止确认、时间范围和独立备份路径；不支持恢复旧 Agent 库后直接上线。\n')
+        parser.exit(1, '重新同步未完成：检查 v2/v3/v4 Agent 库、停止确认、时间范围和独立备份路径；不支持恢复旧 Agent 库后直接上线。\n')
 
 
 if __name__ == '__main__':

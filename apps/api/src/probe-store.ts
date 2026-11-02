@@ -1,3 +1,4 @@
+import { diagnosticSettings } from './telemetry-store.js';
 import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { AgentExtensionsView, ExtensionsConfig, ProbeTask, ProbeTaskInput } from '../../../packages/contracts/src/index.js';
@@ -65,9 +66,13 @@ export function saveProbeTask(db: DB, input: ProbeTaskInput, now: number, id: st
   })();
   return taskById(db, id);
 }
-export function extensionsConfig(db: DB, node: string): ExtensionsConfig {
+export function extensionsConfig(db: DB, node: string, capabilities?: {probes?:number;diagnostics?:number;workloads?:number}): ExtensionsConfig {
   const rows = db.prepare('SELECT config FROM probe_assignments WHERE node_id=? AND end_at IS NULL ORDER BY task_id').all(node) as { config: string }[];
-  return { probes: rows.map(row => JSON.parse(row.config)) };
+  const caps = capabilities ?? {probes:1,diagnostics:1,workloads:1};
+  const settings = diagnosticSettings(db, node);
+  return { probes: caps.probes === 1 ? rows.map(row => JSON.parse(row.config)) : [],
+    ...(caps.diagnostics === 1 ? { diagnostics: settings.diagnostics } : {}),
+    ...(caps.workloads === 1 ? { workloads: settings.workloads } : {}) };
 }
 export function extensionsView(db: DB, node: string): AgentExtensionsView {
   const row = db.prepare('SELECT * FROM agent_extensions WHERE node_id=?').get(node) as { capabilities: string; config_version: number; applied_version: number; error: string | null; drops: string } | undefined;

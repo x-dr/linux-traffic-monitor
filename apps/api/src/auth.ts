@@ -33,7 +33,7 @@ export function installAuth(app: FastifyInstance, db: DB, options: { publicUrl?:
   };
   app.addHook('preHandler', async (req) => {
     const path = req.url.split('?')[0];
-    if (!path.startsWith('/api/v1/') || path === '/api/v1/agent/report' || path === '/api/v1/auth/login' || path === '/api/v1/auth/setup-status') return;
+    if (!path.startsWith('/api/v1/') || path === '/api/v1/agent/report' || path === '/api/v1/agent/register' || path === '/api/v1/auth/login' || path === '/api/v1/auth/setup-status') return;
     const token = req.cookies.sid;
     const session = token ? db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires_at>?').get(digest(token), options.now()) as Session | undefined : undefined;
     if (!session) throw httpError(401, '请先登录');

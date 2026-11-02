@@ -2,6 +2,32 @@
 
 最后更新：2026-11-02；历史记录按各节日期保留。全部操作针对本地工作区或隔离的临时数据库；没有对现有 `trafficmon/traffic.db`、`trafficmon/settings.json` 执行迁移或写入，没有部署实际 VPS。
 
+## 监控 M2-B / M3（2026-11-02）
+
+在 M1/M2-A 基础上补齐剩余阶段。先保存 [设计](monitoring-m2b-m3-design.md) 与 [布局](monitoring-m2b-m3-layout.svg)，使用及恢复说明见 [指南](monitoring-m2b-m3-operations.md)。中心 v5、Agent v4，源码默认 1.3.0；基础协议仍为 v1，新采集默认关闭。
+
+- `npm test`：**76 项通过**。新增 10 项覆盖诊断能力、严格空值/类型、独立 ACK、revision 去重、配置竞争/CSRF、低频样本连续性、未知保持、小时/天有效加权、迟到重算、先汇总再清理、v4→v5 失败回滚、资产去重、注册限时/次数/撤销及幂等、DST 与计费周期、最近一期报表去重与 CSV、容量预测的覆盖/清理重建。原 M1/M2-A 全部回归。
+- `npm run typecheck` / `npm run build`：API、Web、contracts、脚本及浏览器用例检查与生产构建通过。新增图表保持动态加载；没有变更依赖或锁文件。
+- `GOCACHE=/tmp/traffic-monitor-go-cache go test -race ./... -count=1`、`go vet ./...`：通过。新增分钟合并与重复低频采样、文件系统/进程身份、精确/缺失/错误 ACK、过期丢弃摘要、计数器首样/重置/断档、PSI、配置命令拒绝、固定 Docker GET/环境信息不持久化、旧中心一次回退及保留未确认历史；systemd/OpenRC 使用临时假命令分别模拟运行、停止、不可读和不支持。这不等于真实服务管理器运行验收。
+- amd64 / arm64：`CGO_ENABLED=0 GOOS=linux GOARCH=... go build` 均通过，输出 `/tmp/traffic-agent-m2b-amd64` 与 `/tmp/traffic-agent-m2b-arm64`。amd64 用于隔离 QA 两个独立本机 Agent；arm64 未运行设备。
+- `python3 tests/agent_resync_test.py`：**6 项通过**。新增 v4 诊断/工作负载的 SQL 与 JSON revision 一致重发、原独立游标保留。`python3 tests/install_agent_test.py`：**2 项通过**，覆盖架构/URL、校验、文件权限、已有安装保护与固定服务单元恢复。没有在真实 VPS 执行安装。
+- `XDG_CACHE_HOME=/tmp/traffic-monitor-antd-cache antd lint apps/web/src --format json`：**0 问题、无跳过**。修复 Select 旧属性用法；所有新表单有独立 ID，防止跨表单标签聚焦错误。
+- `QA_AGENT_BINARY=/tmp/traffic-agent-m2b-amd64 npm run test:e2e`：Chrome **完整 39 项通过，约 2.5 分钟**。新增 4 项包括诊断历史/URL/刷新保留输入、资产保存与私密注册、报表生成与导出链接、1440/1024/768/390/320px 深浅主题、两个真实本机 Agent 及当前 1.3.0 诊断能力/采集/7 流同步状态。最终 Agent 与页面收尾后，新增 4 项另做定向复核；最终 4 项复核全部通过（约 20 秒），截图等待图表 canvas 完成可见。
+- 默认 `docker compose config --quiet` 与 `NOTIFICATION_KEY_PATH=/tmp/traffic-monitor-notification-key-check docker compose -f compose.yaml -f deploy/compose.notifications.yaml config --quiet` 均通过；后者只是占位路径配置检查，未创建生产密钥。
+- 隔离 Docker smoke 通过：缓存 `linux-traffic-monitor:control` 仅作为运行时，只读挂载当前 API/Web 编译产物与 smoke 脚本，`--network none --read-only --user 1000:1000 --cap-drop ALL`，临时内存 `/data` 和 `/tmp`。验证 v5 初始化、页面资源、Cookie/CSRF、SSE、关闭状态的规则/探测/诊断/报表、短期注册、无通知密钥启动、套餐预览/保存和退出。不是完整 Dockerfile 重建或发布镜像验证。
+
+代表性组合负载：
+
+```bash
+LOAD_SECONDS=15 LOAD_PROBES=1 LOAD_DIAGNOSTICS=1 node --import tsx scripts/monitoring-load.ts
+```
+
+50 模拟节点、500 个探测分配、432,000 条资源（30 天每 5 分钟一条）、504,000 条网卡分钟（7 天逐分钟）、59,025 条探测（约 2 小时）、100 个新指标流。测量 **15.74 秒 / 200 次上报**；上报 P95 **3.03ms**，总览 **337.23ms**，原资源/网卡历史 **52.07ms**，探测历史 **2.04ms**，诊断历史 **1.22ms**；6 帧 SSE、75 个事件。最后一次调度延迟约 1ms，结束尚有 150 个汇总脏桶和 75 条模拟待发送通知。并未排空，也未对长期汇总完整规模做生产容量承诺。这不是同硬件/数据的升级前后对照，不能据此声称增幅 ≤20%。
+
+截图：[诊断手机深色](../artifacts/diagnostics-390-dark.png)、[诊断桌面浅色](../artifacts/diagnostics-1440-light.png)、[运行管理手机浅色](../artifacts/management-390-light.png)、[运行管理桌面浅色](../artifacts/management-1440-light.png)。均为隔离数据；图表缺口与陈旧状态按采样实际呈现，没有把模拟数据当成真实 VPS。
+
+本地验收已经覆盖剩余功能；未执行提交、推送、发布或部署，未改用户库、配置或凭据。真实 VPS、生产数据库副本、长期 systemd/OpenRC、真实受限 Docker 代理、公网 HTTPS 通知、完整 Docker 镜像重建和 arm64 设备仍需目标环境验收。批量安装只做逻辑/文件保护测试；真实下载、系统账号、服务安装和断电恢复需单独演练。
+
 ## 监控 M2-A 网络探测（2026-11-02）
 
 本阶段在 M1 工作区基础上增量实现。设计先保存至 [交互说明](monitoring-m2a-design.md) 和 [SVG 草图](monitoring-m2a-layout.svg)，使用、备份和恢复限制见 [网络探测指南](monitoring-m2a-operations.md)。中心为 SQLite v4，Agent 源码默认版本 1.2.0、SQLite v3，基础协议 v1。
@@ -24,7 +50,7 @@
 
 截图：[手机深色](../artifacts/probes-390-dark.png)、[手机浅色](../artifacts/probes-390-light.png)、[桌面深色](../artifacts/probes-1440-dark.png)、[桌面浅色](../artifacts/probes-1440-light.png)、[多来源历史](../artifacts/probes-history-1440.png)。均为隔离数据，沿用 `artifacts/` 忽略规则。
 
-本阶段没有提交、推送、发布、变更真实服务/凭据或迁移用户库；实际 VPS、systemd/OpenRC、真实公网 HTTPS 目标、生产副本回退和 arm64 设备仍需验证。M2-B/M3 未实施。
+本阶段没有提交、推送、发布、变更真实服务/凭据或迁移用户库；实际 VPS、systemd/OpenRC、真实公网 HTTPS 目标、生产副本回退和 arm64 设备仍需验证。在该阶段记录时 M2-B/M3 尚未实施；后续交付见本文件最上方新记录。
 
 ## 监控 M1-A / M1-B（2026-11-02）
 

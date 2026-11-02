@@ -1,4 +1,7 @@
-import Fastify from 'fastify';
+import { installTelemetryRoutes } from './telemetry-routes.js';
+import { installManagementRoutes } from './management-routes.js';
+import { installRegistrationRoutes } from './registration-routes.js';
+import Fastify, { LogController } from 'fastify';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import staticFiles from '@fastify/static';
@@ -34,6 +37,7 @@ export async function buildApp(options: AppOptions = {}) {
   const key = options.notificationKey ?? loadNotificationKey(options.notificationKeyFile);
   const policy = options.webhookPolicy ?? {};
   const app = Fastify({
+    logController: new LogController({disableRequestLogging:true}),
     logger: options.logger ? { redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-csrf-token"]', 'res.headers["set-cookie"]'] } : false,
     bodyLimit: 2 * 1024 * 1024, trustProxy: ['127.0.0.1', '::1'],
     ajv: { customOptions: { removeAdditional: false } },
@@ -64,6 +68,7 @@ export async function buildApp(options: AppOptions = {}) {
   installNotificationRoutes(app, db, now, key, policy);
   installTrafficRoutes(app, db, now, options.publicUrl);
   installProbeRoutes(app, db, now);
+  installTelemetryRoutes(app,db,now);installManagementRoutes(app,db,now);installRegistrationRoutes(app,db,now);
   app.get('/api/v1/nodes', async () => ({ nodes: listNodes(db, now()) }));
   app.post<{ Body: Static<typeof NodeCreateSchema> }>('/api/v1/nodes', { schema: { body: NodeCreateSchema } }, async (req, reply) => {
     const created = createNode(db, req.body, now());
@@ -105,7 +110,7 @@ export async function buildApp(options: AppOptions = {}) {
   } }, async req => { findNode(db, req.params.id); return history(db, req.params.id, req.query.minutes || 60, now(), req.query); });
   app.get('/api/v1/overview', async () => overview(listNodes(db, now())));
   const strictReportValidator = AjvCompiler()({}, { customOptions: { coerceTypes: false, removeAdditional: false } });
-  app.post<{ Body: AgentReport }>('/api/v1/agent/report', { schema: { body: ReportSchema }, validatorCompiler: strictReportValidator }, async req => ingest(db, req.headers.authorization, req.body, now()));
+  app.post<{ Body: AgentReport }>('/api/v1/agent/report', { schema: { body: ReportSchema }, validatorCompiler: strictReportValidator }, async req => {const started=performance.now();const result=ingest(db, req.headers.authorization, req.body, now());const elapsed=performance.now()-started;db.prepare('UPDATE control_diagnostics SET report_ms=?,report_max_ms=MAX(report_max_ms,?),reports=reports+1 WHERE id=1').run(elapsed,elapsed);return result;});
   app.get('/api/v1/events', async (req, reply) => {
     reply.hijack();
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no', Connection: 'keep-alive', 'X-Content-Type-Options': 'nosniff' });

@@ -1,0 +1,536 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "DiagnosticsConfig": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "enabled",
+        "services"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "services": {
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "manager",
+              "name"
+            ],
+            "properties": {
+              "manager": {
+                "anyOf": [
+                  {
+                    "const": "systemd",
+                    "type": "string"
+                  },
+                  {
+                    "const": "openrc",
+                    "type": "string"
+                  }
+                ]
+              },
+              "name": {
+                "pattern": "^[a-zA-Z0-9_.@:-]{1,100}$",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "WorkloadsConfig": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "enabled",
+        "docker",
+        "processes"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "docker": {
+          "type": "boolean"
+        },
+        "processes": {
+          "maxItems": 20,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "pattern": "^[a-zA-Z0-9_.@:-]{1,100}$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "TelemetryMinute": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "minute_ts",
+        "revision",
+        "config_version",
+        "objects"
+      ],
+      "properties": {
+        "minute_ts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "config_version": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objects": {
+          "maxItems": 128,
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "object",
+              "identity",
+              "observed_at",
+              "interval_seconds",
+              "status",
+              "values"
+            ],
+            "properties": {
+              "object": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+              },
+              "identity": {
+                "minLength": 1,
+                "maxLength": 512,
+                "type": "string"
+              },
+              "observed_at": {
+                "minimum": 0,
+                "maximum": 1e+30,
+                "type": "number"
+              },
+              "interval_seconds": {
+                "minimum": 5,
+                "maximum": 60,
+                "type": "integer"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "ok",
+                    "type": "string"
+                  },
+                  {
+                    "const": "unsupported",
+                    "type": "string"
+                  },
+                  {
+                    "const": "unreadable",
+                    "type": "string"
+                  },
+                  {
+                    "const": "disabled",
+                    "type": "string"
+                  },
+                  {
+                    "const": "absent",
+                    "type": "string"
+                  }
+                ]
+              },
+              "values": {
+                "maxProperties": 24,
+                "type": "object",
+                "patternProperties": {
+                  "^[a-z][a-z0-9_]{0,47}$": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "last",
+                      "avg",
+                      "max",
+                      "count",
+                      "seconds"
+                    ],
+                    "properties": {
+                      "last": {
+                        "anyOf": [
+                          {
+                            "minimum": 0,
+                            "maximum": 1e+30,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "avg": {
+                        "anyOf": [
+                          {
+                            "minimum": 0,
+                            "maximum": 1e+30,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "max": {
+                        "anyOf": [
+                          {
+                            "minimum": 0,
+                            "maximum": 1e+30,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "count": {
+                        "minimum": 0,
+                        "maximum": 10000,
+                        "type": "integer"
+                      },
+                      "seconds": {
+                        "minimum": 0,
+                        "maximum": 60,
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SyncHealth": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "streams",
+        "last_ack_at"
+      ],
+      "properties": {
+        "streams": {
+          "maxItems": 7,
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "pending",
+              "oldest_at",
+              "cursor",
+              "drops_tracked",
+              "dropped",
+              "dropped_oldest_at",
+              "dropped_newest_at"
+            ],
+            "properties": {
+              "name": {
+                "enum": [
+                  "traffic",
+                  "resources",
+                  "totals",
+                  "disk_io",
+                  "probes",
+                  "diagnostics",
+                  "workloads"
+                ],
+                "type": "string"
+              },
+              "pending": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "oldest_at": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "maximum": 1e+30,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cursor": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "drops_tracked": {
+                "type": "boolean"
+              },
+              "dropped": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "dropped_oldest_at": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "maximum": 1e+30,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dropped_newest_at": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "maximum": 1e+30,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "last_ack_at": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "maximum": 1e+30,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Asset": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "provider",
+        "region",
+        "ip",
+        "note",
+        "price_minor",
+        "currency",
+        "billing_months",
+        "expires_at",
+        "bandwidth_mbps",
+        "channel_ids"
+      ],
+      "properties": {
+        "provider": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "region": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "ip": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "note": {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        "price_minor": {
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        "billing_months": {
+          "minimum": 1,
+          "maximum": 120,
+          "type": "integer"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bandwidth_mbps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "maximum": 10000000,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "channel_ids": {
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Registration": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "group",
+        "expires_in",
+        "max_uses"
+      ],
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "group": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "expires_in": {
+          "minimum": 300,
+          "maximum": 86400,
+          "type": "integer"
+        },
+        "max_uses": {
+          "minimum": 1,
+          "maximum": 50,
+          "type": "integer"
+        }
+      }
+    },
+    "Enrollment": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "registration_id",
+        "name",
+        "request_id"
+      ],
+      "properties": {
+        "registration_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "request_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      }
+    },
+    "ReportJob": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "enabled",
+        "period",
+        "timezone",
+        "node_ids",
+        "group",
+        "channel_ids"
+      ],
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "maxLength": 100,
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "const": "day",
+              "type": "string"
+            },
+            {
+              "const": "week",
+              "type": "string"
+            },
+            {
+              "const": "month",
+              "type": "string"
+            },
+            {
+              "const": "billing",
+              "type": "string"
+            }
+          ]
+        },
+        "timezone": {
+          "minLength": 1,
+          "maxLength": 64,
+          "type": "string"
+        },
+        "node_ids": {
+          "maxItems": 50,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "group": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "channel_ids": {
+          "maxItems": 10,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

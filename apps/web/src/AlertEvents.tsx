@@ -56,6 +56,7 @@ export default function AlertEvents({ nodeId }: { nodeId?: string }) {
         <dl><dt>首次异常</dt><dd>{date(e.first_anomaly_at)}</dd><dt>确认触发</dt><dd>{date(e.fired_at)}</dd><dt>最近异常</dt><dd>{date(e.last_anomaly_at)}</dd><dt>恢复 / 关闭</dt><dd>{date(e.resolved_at)} {e.close_reason}</dd><dt>当前值 / 阈值</dt><dd>{e.value ?? '未知'} / {e.threshold}</dd><dt>数据状态</dt><dd>{e.validity}</dd><dt>人工确认</dt><dd>{date(e.acknowledged_at)}</dd><dt>静默至</dt><dd>{date(e.silenced_until)}</dd></dl>
         <p className="muted">{e.detail}</p><div className="monitor-actions"><Button disabled={!!e.acknowledged_at} loading={busy === 'acknowledge'} onClick={() => { void act('acknowledge'); }}>确认事件</Button><Button disabled={['resolved', 'closed'].includes(e.state)} loading={busy === 'silence'} onClick={() => { void act('silence'); }}>静默 1 小时</Button></div>
         {['probe_failure', 'certificate_expiry'].includes(e.kind) && <p><Link to={`/probes?probe_node=${e.node_id}&probe_task=${e.object}`}>查看对应探测历史</Link></p>}
+        {['iowait','steal','psi_cpu','psi_memory','psi_io','inode','read_iops','write_iops','service_down','process_down'].includes(e.kind)&&<p><Link to={`/nodes/${e.node_id}?tab=${e.kind==='process_down'?'workloads':'diagnostics'}&${e.kind==='process_down'?'workload':'diag'}_object=${encodeURIComponent(e.object||(['iowait','steal'].includes(e.kind)?'cpu':`psi:${e.kind.replace('psi_','')}`))}`}>查看对应指标历史</Link></p>}
         <p className="muted">确认只标记人工处理；静默只暂停通知，指标仍继续判定。</p><h3>投递记录</h3><DeliveryList event={e.id} />
       </div>}
     </Drawer>

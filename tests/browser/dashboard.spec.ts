@@ -28,7 +28,7 @@ test('desktop overview renders real API data and two independent Go Agents', asy
   const nodes = (await response.json()).nodes;
   const live = nodes.filter((n: { name: string }) => n.name.startsWith('本机采集'));
   expect(live).toHaveLength(2);
-  for (const node of live) { expect(node.status).toBe('online'); expect(node.snapshot.agent_version).toBe('1.2.0'); expect(node.snapshot.cpu_cores).toBeGreaterThan(0); }
+  for (const node of live) { expect(node.status).toBe('online'); expect(node.snapshot.agent_version).toBe('1.3.0'); expect(node.snapshot.cpu_cores).toBeGreaterThan(0); }
   mkdirSync('artifacts', { recursive: true });
   await page.screenshot({ path: 'artifacts/desktop-overview.png', fullPage: true });
 });

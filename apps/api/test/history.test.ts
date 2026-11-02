@@ -134,12 +134,14 @@ test('v1 database upgrades add disk tables and preserve nodes, sessions and old 
     const path = join(root, 'control.db'), old = new Database(path);
     migrateDatabase(old, 2);
     const node = createNode(old, { name: 'existing node' }, fixture.snapshot.observed_at);
+    old.exec("CREATE TABLE rollup_dirty(node_id TEXT,domain TEXT,bucket INTEGER,PRIMARY KEY(node_id,domain,bucket))");
     ingest(old, `Bearer ${node.token}`, structuredClone(fixture), fixture.snapshot.observed_at);
+    old.exec("DROP TABLE rollup_dirty");
     old.prepare('INSERT INTO sessions VALUES(?,?,?)').run('test-session-hash', 'test-csrf', 9999999999);
     old.exec('DROP TABLE disk_minutes; PRAGMA user_version=1;'); old.close();
     const upgraded = openDatabase(path);
     try {
-      assert.equal(upgraded.pragma('user_version', { simple: true }), 4);
+      assert.equal(upgraded.pragma('user_version', { simple: true }), 5);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM sessions').get() as { n: number }).n, 1);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM nodes').get() as { n: number }).n, 1);
       assert.equal((upgraded.prepare('SELECT COUNT(*) n FROM traffic_minutes').get() as { n: number }).n, 1);

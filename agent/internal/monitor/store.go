@@ -36,7 +36,7 @@ func OpenStore(path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	var version int
-	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version > 3 {
+	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version > 4 {
 		db.Close()
 		return nil, errors.New("Agent 数据库版本不可用，请使用对应版本程序")
 	}
@@ -66,6 +66,12 @@ func OpenStore(path string) (*Store, error) {
 	}
 	if version < 3 {
 		if err = migrateProbeStore(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
+	if version < 4 {
+		if err = migrateTelemetryStore(db); err != nil {
 			db.Close()
 			return nil, err
 		}
@@ -286,5 +292,15 @@ func (s *Store) Acknowledge(ack Ack, report Report) error {
 	} else if report.Probes == nil && ack.Probes != nil && *ack.Probes != 0 {
 		return errors.New("中心确认了未发送的探测批次")
 	}
+	if err = acknowledgeTelemetry(tx, "diagnostics", report.Diagnostics, ack.Diagnostics); err != nil {
+		return err
+	}
+	if err = acknowledgeTelemetry(tx, "workloads", report.Workloads, ack.Workloads); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("UPDATE meta SET v=? WHERE k='last_ack_at'", float64(time.Now().UnixMilli())/1000); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }

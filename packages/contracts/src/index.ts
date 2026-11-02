@@ -1,3 +1,6 @@
+import { TelemetryMinuteSchema, SyncHealthSchema } from './diagnostics.js';
+export * from './diagnostics.js';
+export * from './management.js';
 import { Type, type Static } from '@sinclair/typebox';
 import { CapabilitiesSchema, ExtensionsConfigSchema, ProbeDropsSchema, ProbeResultSchema, type Capabilities, type ExtensionsConfig } from './probes.js';
 export * from './alerts.js';
@@ -90,13 +93,16 @@ export const ReportSchema = Type.Object({
   imported_config: Type.Optional(ConfigSchema),
   capabilities: Type.Optional(CapabilitiesSchema),
   probes: Type.Optional(Type.Array(ProbeResultSchema, { maxItems: 256 })),
+  diagnostics: Type.Optional(Type.Array(TelemetryMinuteSchema, { maxItems: 256 })),
+  workloads: Type.Optional(Type.Array(TelemetryMinuteSchema, { maxItems: 256 })),
+  sync_health: Type.Optional(SyncHealthSchema),
   applied_extensions_config_version: Type.Optional(Type.Integer({ minimum: 0 })),
   extensions_config_error: Type.Optional(Type.Union([Type.Literal('invalid_config'), Type.Literal('persist_failed'), Type.Null()])),
   probe_drops: Type.Optional(ProbeDropsSchema),
 }, { additionalProperties: false });
 export type AgentReport = Static<typeof ReportSchema>;
 export type ReportReply = {
-  ack: { traffic: number; resources: number; totals: number; disk_io?: number; probes?: number };
+  ack: { traffic: number; resources: number; totals: number; disk_io?: number; probes?: number; diagnostics?: number; workloads?: number };
   config: MonitorConfig; config_version: number; received_at: number;
   server_capabilities?: Capabilities; extensions_config?: ExtensionsConfig; extensions_config_version?: number;
 };

@@ -25,12 +25,12 @@ test('old Agent remains valid; extensions require explicit capability and return
   const c = await setup(); try {
     const n = await c.create(), report = c.report(), task = saveProbeTask(c.db, input(n.node.id), c.now() - 200);
     let reply = ingest(c.db, `Bearer ${n.token}`, report, c.now());
-    assert.deepEqual(reply.server_capabilities, { probes: 1 }); assert.equal(reply.extensions_config, undefined);
+    assert.deepEqual(reply.server_capabilities, { probes: 1, diagnostics:1, workloads:1 }); assert.equal(reply.extensions_config, undefined);
     assert.equal(extensionsView(c.db, n.node.id).supported, false);
     report.probes = []; assert.throws(() => ingest(c.db, `Bearer ${n.token}`, report, c.now()), /协商/);
     report.capabilities = { probes: 1 }; report.applied_extensions_config_version = 0;
     reply = ingest(c.db, `Bearer ${n.token}`, report, c.now());
-    assert.deepEqual(reply.extensions_config, extensionsConfig(c.db, n.node.id)); assert.equal(reply.extensions_config!.probes[0].id, task.id);
+    assert.deepEqual(reply.extensions_config, extensionsConfig(c.db, n.node.id, {probes:1})); assert.equal(reply.extensions_config!.probes[0].id, task.id);
     assert.equal(reply.ack.probes, 0); assert.equal(extensionsView(c.db, n.node.id).supported, true);
     report.extensions_config_error = 'persist_failed'; ingest(c.db, `Bearer ${n.token}`, report, c.now());
     assert.equal(extensionsView(c.db, n.node.id).applied_version, 0);
@@ -129,7 +129,7 @@ test('v3 to v4 migration is transactional, preserves existing state and can be r
     migrateDatabase(db, 3); db.exec("INSERT INTO sessions VALUES('existing','csrf',9999999999)");
     db.exec('CREATE TABLE probe_tasks(conflict TEXT)'); assert.throws(() => migrateDatabase(db), /already exists/);
     assert.equal(db.pragma('user_version', { simple: true }), 3); assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='agent_extensions'").get(), undefined);
-    db.exec('DROP TABLE probe_tasks'); migrateDatabase(db); assert.equal(db.pragma('user_version', { simple: true }), 4);
+    db.exec('DROP TABLE probe_tasks'); migrateDatabase(db); assert.equal(db.pragma('user_version', { simple: true }), 5);
     assert.ok(db.prepare("SELECT * FROM sessions WHERE token_hash='existing'").get()); assert.deepEqual(db.pragma('foreign_key_check'), []);
   } finally { db.close(); }
 });

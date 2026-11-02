@@ -1,3 +1,4 @@
+import { ingestTelemetry, markRollupDirty } from './telemetry-store.js';
 import type { DB } from './database.js';
 import { digest, type NodeRow } from './nodes.js';
 import { httpError } from './auth.js';
@@ -43,14 +44,15 @@ export function ingest(db: DB, authorization: string | undefined, report: AgentR
   let extensions: Partial<ReportReply> = {};
   db.transaction(() => {
     extensions = ingestProbes(db, node, report, now);
+    ingestTelemetry(db, node.id, report, now);
     for (const row of report.traffic) trafficInsert.run(node.id, row.interface, row.minute_ts, row.revision, BigInt(row.rx_bytes), BigInt(row.tx_bytes));
     for (const row of report.totals) totalInsert.run(node.id, row.interface, row.revision, BigInt(row.rx_bytes), BigInt(row.tx_bytes));
     for (const row of report.resources) {
-      if (row.minute_ts >= now - 30 * 86400) resourceInsert.run(node.id, row.minute_ts, row.revision, JSON.stringify(row.values));
+      if (row.minute_ts >= now - 30 * 86400) { const changed = resourceInsert.run(node.id, row.minute_ts, row.revision, JSON.stringify(row.values)); if (changed.changes) markRollupDirty(db, node.id, 'resource', row.minute_ts); }
     }
     for (const row of report.disk_io || []) {
-      if (row.minute_ts >= now - 30 * 86400) diskInsert.run(node.id, row.device, row.minute_ts, row.revision,
-        BigInt(row.read_bytes), BigInt(row.write_bytes), row.observed_seconds);
+      if (row.minute_ts >= now - 30 * 86400) { diskInsert.run(node.id, row.device, row.minute_ts, row.revision,
+        BigInt(row.read_bytes), BigInt(row.write_bytes), row.observed_seconds); markRollupDirty(db, node.id, 'disk', row.minute_ts); }
     }
     if (!node.last_received_at && node.config_version === 1 && report.imported_config) {
       updatePolicyCycle(db, node.id, report.imported_config, now);
@@ -69,6 +71,8 @@ export function ingest(db: DB, authorization: string | undefined, report: AgentR
       resources: Math.max(0, ...report.resources.map(row => row.revision)),
       totals: Math.max(0, ...report.totals.map(row => row.revision)),
       ...(report.disk_io ? { disk_io: Math.max(0, ...report.disk_io.map(row => row.revision)) } : {}),
+      ...(report.diagnostics ? { diagnostics: Math.max(0, ...report.diagnostics.map(row => row.revision)) } : {}),
+      ...(report.workloads ? { workloads: Math.max(0, ...report.workloads.map(row => row.revision)) } : {}),
       ...(report.probes ? { probes: Math.max(0, ...report.probes.map(row => row.revision)) } : {}),
     },
     config: JSON.parse(node.config), config_version: node.config_version, received_at: now,

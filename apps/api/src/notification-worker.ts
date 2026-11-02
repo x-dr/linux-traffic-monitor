@@ -36,6 +36,7 @@ export class NotificationWorker {
     if (!['pending', 'suppressed'].includes(current.status)) return false;
     const cancel = () => { this.db.prepare("UPDATE notification_outbox SET status='cancelled' WHERE id=?").run(message.id); return false; };
     if (!message.enabled) return cancel();
+    if(message.phase==='report'){const payload=JSON.parse(message.payload);const job=this.db.prepare('SELECT version,config FROM report_jobs WHERE id=?').get(payload.report_job_id) as {version:number;config:string}|undefined;if(!job||job.version!==payload.report_version||!JSON.parse(job.config).enabled)return cancel();}
     if (message.node_id) {
       const node = findNode(this.db, message.node_id);
       if (!node.enabled || node.archived) return cancel();

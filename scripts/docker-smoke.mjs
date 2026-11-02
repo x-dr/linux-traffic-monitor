@@ -52,6 +52,18 @@ try {
   const probeSaved = await fetch(origin + '/api/v1/probe-tasks', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(probeTask) });
   assert.equal(probeSaved.status, 201);
   assert.equal((await (await fetch(origin + '/api/v1/probe-tasks', { headers })).json()).pairs.length, 1);
+  const diagnostics = await fetch(origin + `/api/v1/nodes/${node.id}/diagnostics`, { headers });
+  assert.equal(diagnostics.status, 200); assert.equal((await diagnostics.json()).supported, false);
+  const settings = {diagnostics:{enabled:false,services:[]},workloads:{enabled:false,docker:false,processes:[]},expected_version:1};
+  // A disabled probe has already allocated an extension config version.
+  const version = await (await fetch(origin + `/api/v1/nodes/${node.id}/diagnostics`, {headers})).json();
+  settings.expected_version=version.config_version;
+  assert.equal((await fetch(origin + `/api/v1/nodes/${node.id}/diagnostic-settings`, {method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(settings)})).status,200);
+  assert.equal((await fetch(origin + '/api/v1/control-diagnostics',{headers})).status,200);
+  const reportJob={name:'Docker disabled report',enabled:false,period:'day',timezone:'Asia/Shanghai',node_ids:[node.id],group:'',channel_ids:[]};
+  assert.equal((await fetch(origin+'/api/v1/report-jobs',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(reportJob)})).status,200);
+  const registration=await fetch(origin+'/api/v1/registration-tokens',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({name:'Docker isolated registration',group:'',expires_in:300,max_uses:1})});
+  assert.equal(registration.status,200);
   const controller = new AbortController();
   const events = await fetch(origin + '/api/v1/events', { headers, signal: controller.signal });
   assert.equal(events.headers.get('content-type'), 'text/event-stream; charset=utf-8');
@@ -60,7 +72,7 @@ try {
   await reader.cancel(); controller.abort();
   assert.equal((await fetch(origin + '/api/v1/auth/logout', { method: 'POST', headers })).status, 200);
   assert.equal((await fetch(origin + '/api/v1/nodes', { headers })).status, 401);
-  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite v4, static assets, auth, SSE, disabled rule/probe, key-free monitoring, quota preview/save and logout.');
+  console.log('Docker smoke passed: non-root + read-only root, compiled admin/entrypoint, SQLite v5, static assets, auth, SSE, disabled rule/probe/diagnostics/report, short registration, key-free monitoring, quota preview/save and logout.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([new Promise(resolve => child.once('exit', resolve)), setTimeout(3000).then(() => child.kill('SIGKILL'))]);

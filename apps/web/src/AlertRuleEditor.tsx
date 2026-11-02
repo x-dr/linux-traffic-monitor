@@ -6,7 +6,7 @@ import { client } from './api';
 import { monitoring } from './monitoring-api';
 import AlertScopeFields from './AlertScopeFields';
 
-export const metricLabels = { offline: '节点离线', stale: '数据陈旧', cpu: 'CPU 高占用', memory: '内存高占用', disk_percent: '磁盘容量', disk_free: '磁盘剩余字节', bandwidth: '带宽使用率' };
+export const metricLabels = { offline: '节点离线', stale: '数据陈旧', cpu: 'CPU 高占用', memory: '内存高占用', disk_percent: '磁盘容量', disk_free: '磁盘剩余字节', bandwidth: '带宽使用率', iowait:'CPU iowait',steal:'CPU steal',psi_cpu:'CPU PSI',psi_memory:'内存 PSI',psi_io:'I/O PSI',inode:'inode 使用率',read_iops:'读取 IOPS',write_iops:'写入 IOPS',service_down:'服务停止',process_down:'进程停止' };
 export const ruleInput = (rule: AlertRule): AlertRuleInput => {
   const { id: _id, matched_nodes: _matched, ...input } = rule; return input;
 };
@@ -18,9 +18,9 @@ export default function AlertRuleEditor({ rule, onSaved }: { rule?: AlertRule; o
   const nodes = useQuery({ queryKey: ['nodes'], queryFn: client.nodes });
   const channels = useQuery({ queryKey: ['channels'], queryFn: monitoring.channels });
   const metric = Form.useWatch('metric', form);
-  const template = (value: AlertRuleInput['metric']) => form.setFieldsValue({ metric: value, name: metricLabels[value], object: value.startsWith('disk') ? '/' : '',
-    threshold: ['offline', 'stale'].includes(value) ? 120 : value === 'disk_free' ? 5 * 1024 ** 3 : 90,
-    duration_seconds: ['offline', 'stale'].includes(value) ? 0 : 300, recovery_threshold: ['offline', 'stale'].includes(value) ? 15 : value === 'disk_free' ? 6 * 1024 ** 3 : value === 'cpu' ? 80 : 85,
+  const template = (value: AlertRuleInput['metric']) => form.setFieldsValue({ metric: value, name: metricLabels[value], object: value.startsWith('disk') ? '/' : value==='inode'?'fs:/':value.includes('iops')?'disk:vda':value==='service_down'?'service:systemd:nginx.service':value==='process_down'?'process:nginx':'',
+    threshold: value.endsWith('_down')?.5:['offline', 'stale'].includes(value) ? 120 : value === 'disk_free' ? 5 * 1024 ** 3 : 90,
+    duration_seconds: ['offline', 'stale'].includes(value) ? 0 : 300, recovery_threshold: value.endsWith('_down')?.5:['offline', 'stale'].includes(value) ? 15 : value === 'disk_free' ? 6 * 1024 ** 3 : value === 'cpu' ? 80 : 85,
     recovery_seconds: ['offline', 'stale'].includes(value) ? 30 : 120 });
   const save = async (input: AlertRuleInput) => {
     setBusy(true); setError('');
@@ -32,10 +32,10 @@ export default function AlertRuleEditor({ rule, onSaved }: { rule?: AlertRule; o
     <Form.Item name="metric" label="规则模板" rules={[{ required: true }]}><Select onChange={template} options={Object.entries(metricLabels).map(([value, label]) => ({ value, label }))} /></Form.Item>
     <Form.Item name="name" label="规则名称" rules={[{ required: true, whitespace: true, max: 100 }]}><Input /></Form.Item>
     <AlertScopeFields nodes={nodes.data?.nodes ?? []} />
-    <Form.Item name="object" label="挂载点" hidden={!metric?.startsWith('disk')} rules={metric?.startsWith('disk') ? [{ required: true, pattern: /^\// }] : []}><Input placeholder="/" /></Form.Item>
+    <Form.Item name="object" label="挂载点或诊断对象" extra="诊断对象使用历史页中的名称，例如 fs:/、disk:vda、service:systemd:nginx.service、process:nginx" hidden={!metric?.startsWith('disk') && !['inode','read_iops','write_iops','service_down','process_down'].includes(metric)} rules={metric?.startsWith('disk') ? [{ required: true, pattern: /^\// }] : []}><Input placeholder="/" /></Form.Item>
     <Form.Item name="bandwidth_mbps" label="带宽容量（Mbps）" hidden={metric !== 'bandwidth'} rules={metric === 'bandwidth' ? [{ required: true }] : []}><InputNumber min={.001} max={1000000} style={{ width: '100%' }} /></Form.Item>
     <div className="form-grid">
-      <Form.Item name="threshold" label={['offline', 'stale'].includes(metric) ? '无新数据超过（秒）' : metric === 'disk_free' ? '剩余空间少于（字节）' : '使用率超过（%）'} rules={[{ required: true }]}><InputNumber min={0} max={Number.MAX_SAFE_INTEGER} style={{ width: '100%' }} /></Form.Item>
+      <Form.Item name="threshold" label={['offline', 'stale'].includes(metric) ? '无新数据超过（秒）' : metric === 'disk_free' ? '剩余空间少于（字节）' : ['service_down','process_down'].includes(metric)?'停止值超过（0 运行 / 1 停止）':metric?.includes('iops')?'IOPS 超过':'使用率超过（%）'} rules={[{ required: true }]}><InputNumber min={0} max={Number.MAX_SAFE_INTEGER} style={{ width: '100%' }} /></Form.Item>
       <Form.Item name="duration_seconds" label="异常持续（秒）" rules={[{ required: true }]}><InputNumber min={0} max={86400} precision={0} style={{ width: '100%' }} /></Form.Item>
       <Form.Item name="recovery_threshold" label={metric === 'disk_free' ? '恢复剩余空间（字节）' : ['offline', 'stale'].includes(metric) ? '恢复数据年龄（1～15 秒）' : '恢复阈值'} rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
       <Form.Item name="recovery_seconds" label="恢复持续（秒）" rules={[{ required: true }]}><InputNumber min={0} max={86400} precision={0} style={{ width: '100%' }} /></Form.Item>

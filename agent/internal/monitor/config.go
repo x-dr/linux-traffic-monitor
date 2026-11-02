@@ -21,6 +21,7 @@ type Settings struct {
 }
 
 type Config struct {
+	DockerProxyURL    string           `json:"docker_proxy_url,omitempty"`
 	ServerURL         string           `json:"server_url"`
 	Token             string           `json:"token"`
 	DataDir           string           `json:"data_dir"`
@@ -112,6 +113,11 @@ func LoadConfig(path string) (Config, error) {
 	for _, cidr := range cfg.ProbeAllowCIDRs {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {
 			return cfg, errors.New("探测允许网段无效")
+		}
+	}
+	if cfg.DockerProxyURL != "" {
+		if err = validateDockerProxy(cfg.DockerProxyURL); err != nil {
+			return cfg, err
 		}
 	}
 	u, err := url.Parse(cfg.ServerURL)

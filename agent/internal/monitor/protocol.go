@@ -72,28 +72,33 @@ type Total struct {
 	TX        string `json:"tx_bytes"`
 }
 type Report struct {
-	ProtocolVersion   int              `json:"protocol_version"`
-	SourceID          string           `json:"source_id"`
-	Snapshot          Snapshot         `json:"snapshot"`
-	Traffic           []TrafficMinute  `json:"traffic"`
-	Resources         []ResourceMinute `json:"resources"`
-	Totals            []Total          `json:"totals"`
-	DiskIO            []DiskMinute     `json:"disk_io,omitempty"`
-	AppliedVersion    int64            `json:"applied_config_version"`
-	ConfigError       *string          `json:"config_error"`
-	ImportedConfig    *Settings        `json:"imported_config,omitempty"`
-	Capabilities      *Capabilities    `json:"capabilities,omitempty"`
-	Probes            *[]ProbeResult   `json:"probes,omitempty"`
-	AppliedExtensions *int64           `json:"applied_extensions_config_version,omitempty"`
-	ExtensionsError   *string          `json:"extensions_config_error,omitempty"`
-	ProbeDrops        *ProbeDrops      `json:"probe_drops,omitempty"`
+	Diagnostics       *[]TelemetryMinute `json:"diagnostics,omitempty"`
+	Workloads         *[]TelemetryMinute `json:"workloads,omitempty"`
+	SyncHealth        *SyncHealth        `json:"sync_health,omitempty"`
+	ProtocolVersion   int                `json:"protocol_version"`
+	SourceID          string             `json:"source_id"`
+	Snapshot          Snapshot           `json:"snapshot"`
+	Traffic           []TrafficMinute    `json:"traffic"`
+	Resources         []ResourceMinute   `json:"resources"`
+	Totals            []Total            `json:"totals"`
+	DiskIO            []DiskMinute       `json:"disk_io,omitempty"`
+	AppliedVersion    int64              `json:"applied_config_version"`
+	ConfigError       *string            `json:"config_error"`
+	ImportedConfig    *Settings          `json:"imported_config,omitempty"`
+	Capabilities      *Capabilities      `json:"capabilities,omitempty"`
+	Probes            *[]ProbeResult     `json:"probes,omitempty"`
+	AppliedExtensions *int64             `json:"applied_extensions_config_version,omitempty"`
+	ExtensionsError   *string            `json:"extensions_config_error,omitempty"`
+	ProbeDrops        *ProbeDrops        `json:"probe_drops,omitempty"`
 }
 type Ack struct {
-	Traffic   int64  `json:"traffic"`
-	Resources int64  `json:"resources"`
-	Totals    int64  `json:"totals"`
-	DiskIO    int64  `json:"disk_io,omitempty"`
-	Probes    *int64 `json:"probes,omitempty"`
+	Diagnostics *int64 `json:"diagnostics,omitempty"`
+	Workloads   *int64 `json:"workloads,omitempty"`
+	Traffic     int64  `json:"traffic"`
+	Resources   int64  `json:"resources"`
+	Totals      int64  `json:"totals"`
+	DiskIO      int64  `json:"disk_io,omitempty"`
+	Probes      *int64 `json:"probes,omitempty"`
 }
 type Reply struct {
 	Ack                Ack               `json:"ack"`

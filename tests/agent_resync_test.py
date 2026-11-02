@@ -77,7 +77,7 @@ class ResyncTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             resync.maintain(self.path, 120, 180, revision_floor=2**63 - 2)
         with closing(sqlite3.connect(self.path)) as db:
-            db.execute('PRAGMA user_version=4')
+            db.execute('PRAGMA user_version=5')
             db.commit()
         with self.assertRaises(ValueError):
             resync.maintain(self.path, 120, 180)
@@ -87,6 +87,23 @@ class ResyncTests(unittest.TestCase):
         for value in ['2026-11-02T10:00:00', '2026-11-02T10:00:01Z']:
             with self.assertRaises(ValueError):
                 resync.timestamp(value)
+
+    def test_v4_streams_reissue_payload_revisions_and_keep_independent_cursors(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            db.executescript("""PRAGMA user_version=4;
+                CREATE TABLE probe_results(sample_id TEXT PRIMARY KEY,revision INTEGER UNIQUE,scheduled_at REAL,result TEXT);
+                CREATE TABLE telemetry_minutes(stream TEXT,minute_ts INTEGER,revision INTEGER UNIQUE,data TEXT,PRIMARY KEY(stream,minute_ts));
+                INSERT INTO sync_state VALUES('probes',10),('diagnostics',10),('workloads',10);""")
+            for stream, revision in [('diagnostics', 6), ('workloads', 7)]:
+                db.execute('INSERT INTO telemetry_minutes VALUES(?,?,?,?)', (stream, 120, revision, json.dumps(dict(revision=revision, minute_ts=120, objects=[]))))
+            db.commit()
+        result = resync.maintain(self.path, 120, 180, True, True, Path(self.root.name) / 'v4.db', 100)
+        self.assertEqual(result['rows']['diagnostics'], 1)
+        self.assertEqual(result['rows']['workloads'], 1)
+        for stream, revision, raw in self.read('SELECT stream,revision,data FROM telemetry_minutes'):
+            self.assertGreater(revision, 100)
+            self.assertEqual(json.loads(raw)['revision'], revision)
+        self.assertEqual(self.read("SELECT cursor FROM sync_state WHERE name='diagnostics'"), [(10,)])
 
     def test_v3_probe_revisions_update_payload_without_replacing_sample_identity(self):
         with closing(sqlite3.connect(self.path)) as db:

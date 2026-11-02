@@ -26,6 +26,7 @@ const app = await buildApp({ db, notificationKey: key, webhookSender: async (_s,
 } });
 initializeAdmin(db, 'load-admin', 'isolated-monitoring-load-password');
 const nodes = Array.from({ length: 50 }, (_, i) => ({ ...createNode(db, { name: `synthetic-${i}`, group: 'load-only' }, clock()), source: randomUUID() }));
+const withDiagnostics=process.env.LOAD_DIAGNOSTICS==='1';
 const withProbes = process.env.LOAD_PROBES === '1', assignments = new Map<string, ProbeAssignment[]>(), sentSlots = new Map<string, number>();
 let probeRows = 0, probeRevision = 100000;
 const probeResult = (p: ProbeAssignment, at: number): ProbeResult => ({ sample_id: randomUUID(), task_id: p.id, task_version: p.version, revision: ++probeRevision,
@@ -62,6 +63,7 @@ const cookie = String(login.headers['set-cookie']).split(';')[0], session = db.p
 let sseFrames = 0;
 class Sink extends EventEmitter { write() { sseFrames++; return true; } end() { this.emit('close'); } }
 const hub = new EventHub(db, clock); hub.add(new Sink() as unknown as ServerResponse, session.token_hash, session.expires_at);
+const diagnosticMs:number[]=[];
 const reportMs: number[] = [], overviewMs: number[] = [], historyMs: number[] = [], probeHistoryMs: number[] = [];
 const measure = async (url: string, samples: number[]) => {
   const start = performance.now(); const response = await app.inject({ url, headers: { cookie } }); samples.push(performance.now() - start); assert.equal(response.statusCode, 200); return response;
@@ -84,17 +86,26 @@ try {
           if (sentSlots.get(key) !== at) { const r = probeResult(p, at); value.probes.push(r); sentSlots.set(key, at); }
         }
       }
+      if(withDiagnostics){
+        const version=(db.prepare('SELECT config_version FROM agent_extensions WHERE node_id=?').get(node.id) as {config_version:number}|undefined)?.config_version??1;
+        value.capabilities={...value.capabilities,diagnostics:1,workloads:1};value.applied_extensions_config_version=version;
+        const stats=(v:number)=>({last:v,avg:v,max:v,count:1,seconds:5});
+        value.diagnostics=[{minute_ts:Math.floor(now/60)*60,revision:cycle+100,config_version:version,objects:[{object:'cpu',identity:'load-boot',observed_at:now,interval_seconds:5,status:'ok',values:{iowait_percent:stats(5),steal_percent:stats(1)}}]}];
+        value.workloads=[{minute_ts:Math.floor(now/60)*60,revision:cycle+100,config_version:version,objects:[{object:'process:demo',identity:'load-process',observed_at:now,interval_seconds:30,status:'ok',values:{running:stats(1),rss_bytes:stats(1024**2)}}]}];
+      }
       const before = performance.now(); const result = await app.inject({ method: 'POST', url: '/api/v1/agent/report', headers: { authorization: `Bearer ${node.token}` }, payload: value });
       assert.equal(result.statusCode, 200); reportMs.push(performance.now() - before);
     }
     assert.equal((await measure('/api/v1/overview', overviewMs)).json().nodes, 50);
     await measure(`/api/v1/nodes/${nodes[0].id}/history?minutes=43200`, historyMs); hub.broadcast(); cycle++;
+    if(withDiagnostics)await measure(`/api/v1/nodes/${nodes[0].id}/diagnostics-history?minutes=1440&object=cpu`,diagnosticMs);
     if (withProbes) await measure(`/api/v1/nodes/${nodes[0].id}/probe-history?task_id=${assignments.get(nodes[0].id)![0].id}&minutes=10080`, probeHistoryMs);
   }
   const p95 = (values: number[]) => Number(values.toSorted((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * .95))].toFixed(2));
   console.log(JSON.stringify({ agents: 50, resource_rows: resourceRows, resource_days: 30, resource_stride_seconds: 300, traffic_rows: trafficRows, traffic_days: 7,
     interval_seconds: 5, reports: reportMs.length, probe_assignments: withProbes ? 500 : 0, seeded_probe_rows: probeRows, probe_history_p95_ms: withProbes ? p95(probeHistoryMs) : null,
     elapsed_seconds: Number(((performance.now() - started) / 1000).toFixed(2)),
+    diagnostic_history_p95_ms:withDiagnostics?p95(diagnosticMs):null,diagnostic_streams:withDiagnostics?100:0,scheduler:db.prepare('SELECT scheduler_lag_ms,last_tick_at FROM control_diagnostics WHERE id=1').get(),rollup_pending:(db.prepare('SELECT COUNT(*) n FROM rollup_dirty').get() as {n:number}).n,
     report_p95_ms: p95(reportMs), overview_p95_ms: p95(overviewMs), history_p95_ms: p95(historyMs), sse_frames: sseFrames,
     events: (db.prepare('SELECT COUNT(*) n FROM alert_events').get() as any).n,
     deliveries: (db.prepare('SELECT status,COUNT(*) count FROM notification_outbox GROUP BY status').all()), notification_transport: 'mock 503 then 204' }, null, 2));

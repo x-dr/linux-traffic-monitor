@@ -197,3 +197,7 @@ docker run --rm -i --read-only --tmpfs /data:uid=1000,gid=1000,mode=0700 --tmpfs
 ## 网络探测阶段
 
 M2-A 新增能力协商、独立探测配置、ICMP/TCP/HTTP 和证书历史。中心库升至 v4，Agent 1.2.0 库升至 v3。先升级中心，再试运行一台新 Agent；旧 Agent 继续采集原指标。任务、本地允许网段、统计口径及回退限制见 [网络探测指南](monitoring-m2a-operations.md)。本地验收不替代实际 VPS 常驻运行验证。
+
+## M2-B / M3 增量功能
+
+当前升级新增独立诊断/工作负载流，中心 v5、Agent v4；新采集默认关闭。开启、备份/回退、批量接入与报表口径见 [系统诊断及运行管理指南](monitoring-m2b-m3-operations.md)。不要将旧阶段记录中的库版本当作当前版本。

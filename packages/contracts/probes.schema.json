@@ -8,6 +8,14 @@
         "probes": {
           "const": 1,
           "type": "number"
+        },
+        "diagnostics": {
+          "const": 1,
+          "type": "number"
+        },
+        "workloads": {
+          "const": 1,
+          "type": "number"
         }
       }
     },
@@ -96,6 +104,76 @@
                 "minimum": 1,
                 "maximum": 10,
                 "type": "integer"
+              }
+            }
+          }
+        },
+        "diagnostics": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "enabled",
+            "services"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "services": {
+              "maxItems": 10,
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "manager",
+                  "name"
+                ],
+                "properties": {
+                  "manager": {
+                    "anyOf": [
+                      {
+                        "const": "systemd",
+                        "type": "string"
+                      },
+                      {
+                        "const": "openrc",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "pattern": "^[a-zA-Z0-9_.@:-]{1,100}$",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "workloads": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "enabled",
+            "docker",
+            "processes"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "docker": {
+              "type": "boolean"
+            },
+            "processes": {
+              "maxItems": 20,
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "pattern": "^[a-zA-Z0-9_.@:-]{1,100}$",
+                "type": "string"
               }
             }
           }

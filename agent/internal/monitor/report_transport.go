@@ -16,6 +16,9 @@ func (r *Runner) Send(ctx context.Context) error {
 	if err := r.Store.PruneProbes(time.Now()); err != nil {
 		return errors.New("探测保留任务失败")
 	}
+	if err := r.Store.PruneTelemetry(time.Now()); err != nil {
+		return errors.New("诊断历史清理失败")
+	}
 	report, err := r.Store.Batch()
 	if err != nil {
 		return errors.New("待同步记录读取失败")
@@ -31,18 +34,43 @@ func (r *Runner) Send(ctx context.Context) error {
 	if cfg.AppliedVersion == 0 {
 		report.ImportedConfig = &cfg.Settings
 	}
-	if caps != nil && caps.Probes == 1 {
-		report.Capabilities = &Capabilities{Probes: 1}
+	if caps != nil && (caps.Probes == 1 || caps.Diagnostics == 1 || caps.Workloads == 1) {
+		report.Capabilities = &Capabilities{}
 		report.AppliedExtensions = &cfg.AppliedExtensions
 		report.ExtensionsError = extensionError
-		probes, err := r.Store.probeBatch()
-		if err != nil {
-			return errors.New("探测同步读取失败")
+		if caps.Diagnostics == 1 {
+			report.Capabilities.Diagnostics = 1
+			batch, e := r.Store.telemetryBatch("diagnostics")
+			if e != nil {
+				return e
+			}
+			report.Diagnostics = &batch
+			report.SyncHealth, e = r.Store.SyncHealth()
+			if e != nil {
+				return e
+			}
 		}
-		report.Probes = &probes
-		report.ProbeDrops, err = r.Store.ProbeDropSummary()
-		if err != nil {
-			return err
+		if caps.Workloads == 1 {
+			report.Capabilities.Workloads = 1
+			batch, e := r.Store.telemetryBatch("workloads")
+			if e != nil {
+				return e
+			}
+			report.Workloads = &batch
+		}
+		if caps.Probes == 1 {
+			report.Capabilities.Probes = 1
+			report.AppliedExtensions = &cfg.AppliedExtensions
+			report.ExtensionsError = extensionError
+			probes, err := r.Store.probeBatch()
+			if err != nil {
+				return errors.New("探测同步读取失败")
+			}
+			report.Probes = &probes
+			report.ProbeDrops, err = r.Store.ProbeDropSummary()
+			if err != nil {
+				return err
+			}
 		}
 	}
 	reply, status, err := r.postReport(ctx, cfg, &report)
@@ -53,6 +81,9 @@ func (r *Runner) Send(ctx context.Context) error {
 		report.AppliedExtensions = nil
 		report.ExtensionsError = nil
 		report.ProbeDrops = nil
+		report.Diagnostics = nil
+		report.Workloads = nil
+		report.SyncHealth = nil
 		reply, _, err = r.postReport(ctx, cfg, &report)
 	}
 	if err != nil {
@@ -61,7 +92,7 @@ func (r *Runner) Send(ctx context.Context) error {
 		r.mu.Unlock()
 		return err
 	}
-	if reply.ConfigVersion < 1 || reply.ReceivedAt < 0 || (reply.ServerCapabilities != nil && reply.ServerCapabilities.Probes != 0 && reply.ServerCapabilities.Probes != 1) {
+	if reply.ConfigVersion < 1 || reply.ReceivedAt < 0 || (reply.ServerCapabilities != nil && ((reply.ServerCapabilities.Probes != 0 && reply.ServerCapabilities.Probes != 1) || (reply.ServerCapabilities.Diagnostics != 0 && reply.ServerCapabilities.Diagnostics != 1) || (reply.ServerCapabilities.Workloads != 0 && reply.ServerCapabilities.Workloads != 1))) {
 		return errors.New("中心响应格式无效")
 	}
 	if err = r.Store.Acknowledge(reply.Ack, report); err != nil {
@@ -75,8 +106,22 @@ func (r *Runner) Send(ctx context.Context) error {
 	if _, err = r.Store.DB.Exec("UPDATE meta SET v=? WHERE k='server_probes_supported'", supported); err != nil {
 		return errors.New("中心能力持久化失败")
 	}
+	if reply.ServerCapabilities != nil {
+		raw, _ := json.Marshal(reply.ServerCapabilities)
+		if _, err = r.Store.DB.Exec("INSERT INTO meta VALUES('telemetry_capabilities',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", string(raw)); err != nil {
+			return err
+		}
+	} else {
+		if _, err = r.Store.DB.Exec("DELETE FROM meta WHERE k='telemetry_capabilities'"); err != nil {
+			return err
+		}
+	}
 	r.mu.Lock()
 	r.serverCapabilities = reply.ServerCapabilities
+	r.telemetryCapabilities = Capabilities{}
+	if reply.ServerCapabilities != nil {
+		r.telemetryCapabilities = *reply.ServerCapabilities
+	}
 	r.probesActive = reply.ServerCapabilities != nil && reply.ServerCapabilities.Probes == 1
 	r.mu.Unlock()
 	if reply.ConfigVersion > cfg.AppliedVersion {
@@ -98,7 +143,7 @@ func (r *Runner) Send(ctx context.Context) error {
 		}
 		r.mu.Unlock()
 	}
-	if reply.ServerCapabilities != nil && reply.ServerCapabilities.Probes == 1 && reply.ExtensionsVersion > cfg.AppliedExtensions {
+	if reply.ServerCapabilities != nil && (reply.ServerCapabilities.Probes == 1 || reply.ServerCapabilities.Diagnostics == 1 || reply.ServerCapabilities.Workloads == 1) && reply.ExtensionsVersion > cfg.AppliedExtensions {
 		candidate := cfg
 		message := "invalid_config"
 		if reply.ExtensionsConfig == nil {
@@ -159,6 +204,17 @@ func (r *Runner) postReport(ctx context.Context, cfg Config, report *Report) (Re
 func budgetReport(report *Report, budget int) ([]byte, error) {
 	traffic, resources, totals, disks := report.Traffic, report.Resources, report.Totals, report.DiskIO
 	var probes []ProbeResult
+	var diagnostics, workloads []TelemetryMinute
+	if report.Diagnostics != nil {
+		diagnostics = *report.Diagnostics
+		empty := []TelemetryMinute{}
+		report.Diagnostics = &empty
+	}
+	if report.Workloads != nil {
+		workloads = *report.Workloads
+		empty := []TelemetryMinute{}
+		report.Workloads = &empty
+	}
 	if report.Probes != nil {
 		probes = *report.Probes
 		empty := []ProbeResult{}
@@ -176,8 +232,8 @@ func budgetReport(report *Report, budget int) ([]byte, error) {
 	if len(disks) > 0 {
 		remaining -= len(`,"disk_io":[]`)
 	}
-	lengths := []int{len(traffic), len(resources), len(totals), len(disks), len(probes)}
-	items := make([][][]byte, 5)
+	lengths := []int{len(traffic), len(resources), len(totals), len(disks), len(probes), len(diagnostics), len(workloads)}
+	items := make([][][]byte, 7)
 	for stream, count := range lengths {
 		for i := 0; i < count; i++ {
 			var value any
@@ -192,6 +248,10 @@ func budgetReport(report *Report, budget int) ([]byte, error) {
 				value = disks[i]
 			case 4:
 				value = probes[i]
+			case 5:
+				value = diagnostics[i]
+			case 6:
+				value = workloads[i]
 			}
 			body, e := json.Marshal(value)
 			if e != nil {
@@ -210,7 +270,7 @@ func budgetReport(report *Report, budget int) ([]byte, error) {
 	if remaining < minimum {
 		return nil, errors.New("快照及最小同步批次超过总字节预算")
 	}
-	positions := make([]int, 5)
+	positions := make([]int, 7)
 	for {
 		progress := false
 		for stream, values := range items {
@@ -243,6 +303,20 @@ func budgetReport(report *Report, budget int) ([]byte, error) {
 			selected = []ProbeResult{}
 		}
 		report.Probes = &selected
+	}
+	if report.Diagnostics != nil {
+		selected := diagnostics[:positions[5]]
+		if selected == nil {
+			selected = []TelemetryMinute{}
+		}
+		report.Diagnostics = &selected
+	}
+	if report.Workloads != nil {
+		selected := workloads[:positions[6]]
+		if selected == nil {
+			selected = []TelemetryMinute{}
+		}
+		report.Workloads = &selected
 	}
 	body, err := json.Marshal(report)
 	if err != nil || len(body) > budget {

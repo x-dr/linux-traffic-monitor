@@ -13,6 +13,7 @@ import ConnectPage from './Connect';
 import SettingsPage from './Settings';
 import AlertsPage from './Alerts';
 import ProbesPage from './Probes';
+import Management from './Management';
 import { LoadingState } from './components';
 import WorkspaceBreadcrumb from './WorkspaceBreadcrumb';
 
@@ -21,6 +22,7 @@ const items = [
   { key: '/nodes', icon: <CloudServerOutlined />, label: 'VPS 管理' },
   { key: '/alerts', icon: <BellOutlined />, label: '告警中心' },
   { key: '/probes', icon: <RadarChartOutlined />, label: '网络探测' },
+  { key: '/management', icon: <SettingOutlined />, label: '运行管理' },
   { key: '/connect', icon: <PlusCircleOutlined />, label: '接入服务器' },
   { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
 ];
@@ -71,6 +73,7 @@ export default function Application({ dark, toggleTheme }: { dark: boolean; togg
           <Route path="/nodes/:id" element={<NodeDetail />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/probes" element={<ProbesPage />} />
+          <Route path="/management" element={<Management />} />
           <Route path="/connect" element={<ConnectPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/overview" replace />} />
