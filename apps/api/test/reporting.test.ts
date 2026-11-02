@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup } from './support.js';
 import { ingest } from '../src/ingest.js';
@@ -8,6 +8,33 @@ import { reportTiming, reportingView } from '../src/reporting.js';
 import { AlertEngine, resourceFresh } from '../src/alert-engine.js';
 import { cpuRule } from './monitoring-support.js';
 import { randomUUID } from 'node:crypto';
+
+test('source conflicts block reporting capabilities and log only the reason; the original source can resume', async () => {
+  const c = await setup();
+  const warnings = mock.method(c.app.log, 'warn', () => {});
+  try {
+    const n = await c.create(), original = c.report();
+    ingest(c.db, `Bearer ${n.token}`, original, c.now());
+    const changed = structuredClone(original);
+    changed.source_id = randomUUID();
+    changed.capabilities = { reporting: 1 };
+    const rejected = await c.app.inject({ method: 'POST', url: '/api/v1/agent/report',
+      headers: { authorization: `Bearer ${n.token}` }, payload: changed });
+    assert.equal(rejected.statusCode, 409, rejected.body);
+    const reason = '采集源发生变化，请创建新节点以保留原历史';
+    assert.equal(rejected.json().error, reason);
+    assert.equal(reportingView(c.db, n.node.id).supported, false);
+    assert.equal(findNode(c.db, n.node.id).source_id, original.source_id);
+    assert.equal(warnings.mock.calls.length, 1);
+    assert.deepEqual(warnings.mock.calls[0].arguments, [{ statusCode: 409, reason }, 'Agent 上报冲突']);
+    assert.equal(JSON.stringify(warnings.mock.calls[0].arguments).includes(n.token), false);
+    original.capabilities = { reporting: 1 };
+    const resumed = await c.app.inject({ method: 'POST', url: '/api/v1/agent/report',
+      headers: { authorization: `Bearer ${n.token}` }, payload: original });
+    assert.equal(resumed.statusCode, 200, resumed.body);
+    assert.equal(reportingView(c.db, n.node.id).supported, true);
+  } finally { warnings.mock.restore(); await c.close(); }
+});
 
 test('reporting settings validate all five options, require auth and CSRF, preserve settings and reject races', async () => {
   const c = await setup();

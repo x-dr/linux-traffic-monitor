@@ -50,10 +50,13 @@ export async function buildApp(options: AppOptions = {}) {
     reply.header('X-Content-Type-Options', 'nosniff');
     if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
   });
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
     const error = err as Error & { statusCode?: number; validation?: unknown };
     const code = error.statusCode && error.statusCode >= 400 && error.statusCode < 600 ? error.statusCode : 500;
     if (code >= 500) app.log.error({ message: error.message }, '请求处理失败');
+    if (code === 409 && req.routeOptions.url === '/api/v1/agent/report') {
+      app.log.warn({ statusCode: code, reason: error.message }, 'Agent 上报冲突');
+    }
     reply.code(code).send({ error: code >= 500 && code !== 503 ? '服务器内部错误，请查看服务日志' : error.message });
   });
   const hub = new EventHub(db, now);

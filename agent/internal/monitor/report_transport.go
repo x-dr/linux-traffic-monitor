@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -193,8 +192,7 @@ func (r *Runner) postReport(ctx context.Context, cfg Config, report *Report) (Re
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return reply, response.StatusCode, fmt.Errorf("中心拒绝上报（HTTP %d），本地同步进度保持不变", response.StatusCode)
+		return reply, response.StatusCode, reportRejection(response.StatusCode, response.Body)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 65537))
 	if err != nil || len(raw) > 65536 {
