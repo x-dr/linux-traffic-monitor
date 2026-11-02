@@ -134,7 +134,7 @@ python3 install-agent.py --server https://monitor.example.com --registration-id 
 
 确认后以 root 添加 `--apply` 安装；注册令牌通过隐藏输入提供。脚本识别架构、从中心读取 SHA256SUMS 并校验程序，已有安装会停止。可用 `--sha256` 固定已核对的校验值；使用 `--download-url` 自定义源时必须同时指定 `--sha256`。清单与程序来自同一中心，须信任中心 HTTPS。详见 [批量接入](docs/monitoring-m2b-m3-operations.md#批量接入)。
 
-固定下载地址随中心镜像升级，已有 Agent 不会自动替换。接口不要求登录，只提供公开安装文件；未打包文件时返回 503，其他文件返回 404。源码运行的分发目录默认为 `artifacts/agent`，可通过 `AGENT_DIST_ROOT` 修改。
+固定下载地址随中心镜像升级，已有 Agent 不会自动替换。已有节点按 [Agent 更新指南](docs/agent-upgrade.md) 校验新程序、停服务备份、替换并验证持续上报，无需重新注册；安装脚本不用于覆盖更新。接口不要求登录，只提供公开安装文件；未打包文件时返回 503，其他文件返回 404。源码运行的分发目录默认为 `artifacts/agent`，可通过 `AGENT_DIST_ROOT` 修改。
 
 ### 下载发布版本
 

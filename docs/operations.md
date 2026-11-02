@@ -154,6 +154,12 @@ tail -f /var/log/trafficmon-agent/agent.log
 
 启动后在后台确认节点在线、主机名和资源指标，并检查监控配置是否已应用。容器内的 OpenRC 检查不能替代实际 VPS 的开机启动验证。服务编写方式参考 [OpenRC 官方 supervisor 指南](https://github.com/OpenRC/openrc/blob/master/supervise-daemon-guide.md)。
 
+## 更新已有 Agent
+
+逐台更新时，先升级中心，再下载并校验匹配架构的 Agent，停止服务后完整备份原程序、配置和数据目录，替换二进制并启动，最后在中心确认持续上报。沿用原节点凭据与本地库，无需重新创建节点；`install-agent.py` 仅用于新安装。
+
+systemd / OpenRC 的完整命令、下载来源选择、验收和配套回退见 [Agent 更新指南](agent-upgrade.md)。恢复旧 Agent 库前须核对中心确认水位，避免已上报后直接恢复旧库产生冲突。
+
 ## 从旧版数据迁移
 
 先执行只读预览；不会创建目标目录：
